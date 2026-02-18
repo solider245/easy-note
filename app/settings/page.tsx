@@ -199,7 +199,7 @@ export default function SettingsPage() {
             const data = await res.json();
             if (res.ok) {
                 setSecurityStatus('success');
-                setSecurityMessage('Password matching records! Logging out...');
+                setSecurityMessage('Password updated successfully! Logging out...');
                 setTimeout(() => {
                     fetch('/api/auth/logout', { method: 'POST' }).then(() => router.push('/login'));
                 }, 2000);

@@ -149,13 +149,15 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
   };
 
   const handleDeleteNote = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this note?')) return;
+    if (!confirm('Move this note to Trash? You can restore it from the Trash page.')) return;
     try {
       const res = await fetch(`/api/notes/${id}`, { method: 'DELETE' });
       if (res.ok) {
         if (selectedNote?.id === id) setSelectedNote(null);
         setNotes(notes.filter(n => n.id !== id));
-        toast.success('Note deleted');
+        toast.success('Note moved to Trash', {
+          action: { label: 'View Trash', onClick: () => router.push('/trash') },
+        });
       }
     } catch {
       toast.error('Failed to delete note');

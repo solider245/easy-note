@@ -6,6 +6,8 @@ interface UsageBannerProps {
 }
 
 export default function UsageBanner({ used, total }: UsageBannerProps) {
+    // Don't show banner if total is Infinity (DB mode) or usage is below 80%
+    if (!isFinite(total) || total === 0) return null;
     const percentage = Math.round((used / total) * 100);
 
     if (percentage < 80) return null;

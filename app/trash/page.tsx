@@ -9,8 +9,10 @@ import {
 } from 'lucide-react';
 import { NoteMeta } from '@/lib/types';
 
+type TrashedNote = NoteMeta & { daysUntilPurge?: number };
+
 export default function TrashPage() {
-    const [notes, setNotes] = useState<NoteMeta[]>([]);
+    const [notes, setNotes] = useState<TrashedNote[]>([]);
     const [loading, setLoading] = useState(true);
     const [isActioning, setIsActioning] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -152,9 +154,15 @@ export default function TrashPage() {
                                     </h3>
                                     <div className="flex items-center gap-4 text-xs text-gray-400">
                                         <div className="flex items-center gap-1">
-                                            <Calendar className="h-3 w-4" />
+                                            <Calendar className="h-3 w-3" />
                                             Deleted {new Date(note.deletedAt!).toLocaleDateString()}
                                         </div>
+                                        {note.daysUntilPurge !== undefined && (
+                                            <div className={`flex items-center gap-1 font-medium ${note.daysUntilPurge <= 3 ? 'text-red-500' : note.daysUntilPurge <= 7 ? 'text-amber-500' : 'text-gray-400'}`}>
+                                                <AlertCircle className="h-3 w-3" />
+                                                Auto-delete in {note.daysUntilPurge}d
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
