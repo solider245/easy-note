@@ -18,7 +18,7 @@ function verifyAuthToken(token: string): boolean {
     }
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
     const tokenCookie = request.cookies.get('auth-token');
     const { pathname } = request.nextUrl;
 
@@ -46,6 +46,6 @@ export const config = {
          * - manifest.json (PWA manifest, must be public)
          * - icon.png / *.svg / *.png (public assets)
          */
-        '/((?!_next/static|_next/image|favicon.ico|manifest\\.json|icon\\.png|.*\\.svg|.*\\.png).*)',
+        '/((?!_next/static|_next/image|favicon\\.ico|manifest\\.json|icon\\.png|.*\\.svg|.*\\.png).*)',
     ],
 };
