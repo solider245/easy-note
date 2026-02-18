@@ -5,7 +5,8 @@ let _instance: StorageAdapter | null = null;
 export async function getStorage(): Promise<StorageAdapter> {
     if (_instance) return _instance;
 
-    if (process.env.DATABASE_URL) {
+    const hasDb = process.env.DATABASE_URL || process.env.TURSO_DATABASE_URL;
+    if (hasDb) {
         const { DbAdapter } = await import('./db-adapter');
         _instance = new DbAdapter();
     } else if (process.env.BLOB_READ_WRITE_TOKEN) {

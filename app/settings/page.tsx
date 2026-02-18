@@ -104,8 +104,21 @@ export default function SettingsPage() {
                         <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Security</h2>
 
                         {configStatus && configStatus.activeStorage === 'Local Memory (Demo)' && (
-                            <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-sm text-amber-800 dark:text-amber-300">
-                                ⚠️ Password changes require a database connection. Connect a database (Turso or Supabase) to enable this feature.
+                            <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl text-sm space-y-3">
+                                <div className="flex items-start gap-3">
+                                    <span className="text-xl">💡</span>
+                                    <div className="text-amber-800 dark:text-amber-300">
+                                        <p className="font-semibold mb-1">How to enable Permanent Storage & Passwords:</p>
+                                        <p className="opacity-80">Database configuration is managed through your host (Vercel). Once connected, this section will unlock automatically.</p>
+                                    </div>
+                                </div>
+                                <a
+                                    href="https://vercel.com/dashboard"
+                                    target="_blank"
+                                    className="block w-full text-center py-2 px-4 bg-amber-200 dark:bg-amber-800 hover:bg-amber-300 dark:hover:bg-amber-700 text-amber-900 dark:text-amber-100 rounded-lg font-bold transition-colors"
+                                >
+                                    Go to Vercel Dashboard →
+                                </a>
                             </div>
                         )}
 
