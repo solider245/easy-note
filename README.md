@@ -53,11 +53,7 @@ Connect a real database to unlock **persistent settings** and **in-app password 
    DATABASE_URL=libsql://your-db.turso.io   # or postgresql://...
    DATABASE_AUTH_TOKEN=your-turso-token      # Turso only
    ```
-3. Run the migration to create tables:
-   ```bash
-   npx drizzle-kit push
-   ```
-4. Redeploy. You can now change your password from the **Settings** page inside the app.
+3. **Redeploy**. The app will automatically create the required tables on the first visit. You can then change your password from the **Settings** page inside the app.
 
 ## 🚀 Roadmap / Future Plans
 
