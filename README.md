@@ -38,6 +38,27 @@ npm run dev
 
 Note: Local development requires a `.env.local` with `BLOB_READ_WRITE_TOKEN`.
 
+## Phase 2: Database Integration (Optional Upgrade)
+
+Connect a real database to unlock **persistent settings** and **in-app password changes**.
+
+### Supported Databases
+- **Turso** (SQLite at the edge) — recommended for personal use
+- **Supabase / Neon** (Postgres) — recommended for teams
+
+### Setup Steps
+1. Create a database on [Turso](https://turso.tech) or [Supabase](https://supabase.com).
+2. Add environment variables in Vercel → Settings → Environment Variables:
+   ```
+   DATABASE_URL=libsql://your-db.turso.io   # or postgresql://...
+   DATABASE_AUTH_TOKEN=your-turso-token      # Turso only
+   ```
+3. Run the migration to create tables:
+   ```bash
+   npx drizzle-kit push
+   ```
+4. Redeploy. You can now change your password from the **Settings** page inside the app.
+
 ## 🚀 Roadmap / Future Plans
 
 - [ ] **AI Writing Assistant**: Integrate Vercel AI SDK for smart autocompletion, summaries, and title generation.

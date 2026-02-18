@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkPassword } from '@/lib/auth';
+import { checkPasswordWithDb } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
     const { password } = await request.json();
 
-    if (checkPassword(password)) {
+    if (await checkPasswordWithDb(password)) {
         const response = NextResponse.json({ success: true });
         // In a real app, use a secure signed token
         response.cookies.set('auth-token', 'authenticated', {
