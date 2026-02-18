@@ -55,11 +55,29 @@ export class ConfigService {
     }
 
     /**
-     * Get a config value. Priority: Env > File > DB
+     * Get a config value.
+     * For ADMIN_PASSWORD: DB > Env (user can override via UI)
+     * For others: Env > File > DB
      */
     async get(key: string): Promise<string | undefined> {
         // 1. Check cache
         if (this.cache.has(key)) return this.cache.get(key);
+
+        // Special case: ADMIN_PASSWORD — DB takes priority over env so UI changes take effect
+        if (key === 'ADMIN_PASSWORD') {
+            const dbVal = await this.getFromDb(key);
+            if (dbVal !== undefined) {
+                this.cache.set(key, dbVal);
+                return dbVal;
+            }
+            // Fall back to env variable (default password)
+            const envVal = process.env[key];
+            if (envVal) {
+                this.cache.set(key, envVal);
+                return envVal;
+            }
+            return undefined;
+        }
 
         // 2. Check Env
         const envVal = process.env[key];
@@ -75,9 +93,22 @@ export class ConfigService {
         }
 
         // 4. Check DB
+        const dbVal = await this.getFromDb(key);
+        if (dbVal !== undefined) {
+            this.cache.set(key, dbVal);
+            return dbVal;
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Internal helper: fetch a value directly from DB (no cache, no env).
+     */
+    private async getFromDb(key: string): Promise<string | undefined> {
         try {
             const db = await getDb();
-            // We need to avoid infinite recursion here. 
+            // We need to avoid infinite recursion here.
             // getDb calls configService.get in some flows, but only for secondary keys usually.
             // The primary DATABASE_URL must be from Env or File.
 
@@ -96,13 +127,11 @@ export class ConfigService {
                 if (SENSITIVE_KEYS.includes(key)) {
                     val = decrypt(val);
                 }
-                this.cache.set(key, val);
                 return val;
             }
         } catch (e) {
             // Ignore DB errors (e.g. during initial setup)
         }
-
         return undefined;
     }
 
