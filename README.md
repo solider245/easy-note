@@ -37,3 +37,11 @@ npm run dev
 ```
 
 Note: Local development requires a `.env.local` with `BLOB_READ_WRITE_TOKEN`.
+
+## 🚀 Roadmap / Future Plans
+
+- [ ] **AI Writing Assistant**: Integrate Vercel AI SDK for smart autocompletion, summaries, and title generation.
+- [ ] **Settings UI**: Add a secure web interface for changing the password and managing app settings.
+- [ ] **Tagging System**: Organize notes with tags and advanced filtering.
+- [ ] **S3 Media Migration**: Automated tool to move local/Blob media to S3-compatible storage.
+- [ ] **Search**: Full-text search across all notes (especially for Phase 2 DB).
