@@ -3,17 +3,26 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Shield, Database, Cloud, Sparkles, ChevronLeft, Save, Loader2, CheckCircle2 } from 'lucide-react';
+import {
+    Shield, Database, Cloud, Sparkles, ChevronLeft, Save, Loader2,
+    CheckCircle2, AlertCircle, Copy, Link, Wand2, Terminal, Info
+} from 'lucide-react';
 
 export default function SettingsPage() {
-    const [currentPassword, setCurrentPassword] = useState('');
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [securityStatus, setSecurityStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-    const [securityMessage, setSecurityMessage] = useState('');
+    const router = useRouter();
 
-    // Config States
+    // -- State: Config Status --
     const [configStatus, setConfigStatus] = useState<any>(null);
+    const isDemo = configStatus?.activeStorage === 'Local Memory (Demo)';
+
+    // -- State: Database Setup Wizard --
+    const [dbUrl, setDbUrl] = useState('');
+    const [dbToken, setDbToken] = useState('');
+    const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+    const [testError, setTestError] = useState('');
+    const [setupStep, setSetupStep] = useState<'input' | 'guide'>('input');
+
+    // -- State: AI & S3 Config --
     const [aiKey, setAiKey] = useState('');
     const [aiModel, setAiModel] = useState('gpt-4o-mini');
     const [s3Endpoint, setS3Endpoint] = useState('');
@@ -21,10 +30,14 @@ export default function SettingsPage() {
     const [s3Bucket, setS3Bucket] = useState('');
     const [s3AccessKey, setS3AccessKey] = useState('');
     const [s3SecretKey, setS3SecretKey] = useState('');
-
     const [isSavingConfig, setIsSavingConfig] = useState<string | null>(null);
 
-    const router = useRouter();
+    // -- State: Security --
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [securityStatus, setSecurityStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+    const [securityMessage, setSecurityMessage] = useState('');
 
     const fetchConfig = async () => {
         try {
@@ -40,6 +53,79 @@ export default function SettingsPage() {
         fetchConfig();
     }, []);
 
+    // -- Database Wizard Actions --
+    const handleTestConnection = async () => {
+        setTestStatus('testing');
+        setTestError('');
+        try {
+            const res = await fetch('/api/status/config/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: dbUrl, authToken: dbToken }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                setTestStatus('success');
+                setSetupStep('guide');
+                toast.success('Connection successful!');
+            } else {
+                setTestStatus('error');
+                setTestError(data.error || 'Connection failed');
+            }
+        } catch (e) {
+            setTestStatus('error');
+            setTestError('Network error during connection test');
+        }
+    };
+
+    const handleVpsSave = async () => {
+        setIsSavingConfig('DATABASE_URL');
+        try {
+            await fetch('/api/status/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: 'DATABASE_URL', value: dbUrl }),
+            });
+            if (dbToken) {
+                await fetch('/api/status/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: 'TURSO_AUTH_TOKEN', value: dbToken }),
+                });
+            }
+            toast.success('Configuration saved! Please restart your container/service.');
+            setTimeout(() => window.location.reload(), 2000);
+        } catch (e) {
+            toast.error('Failed to save configuration');
+        } finally {
+            setIsSavingConfig(null);
+        }
+    };
+
+    // -- Config Actions --
+    const saveConfig = async (key: string, value: string) => {
+        if (!value) return;
+        setIsSavingConfig(key);
+        try {
+            const res = await fetch('/api/status/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key, value }),
+            });
+            if (res.ok) {
+                toast.success(`${key} saved successfully`);
+                fetchConfig();
+            } else {
+                toast.error(`Failed to save ${key}`);
+            }
+        } catch {
+            toast.error('Connection error');
+        } finally {
+            setIsSavingConfig(null);
+        }
+    };
+
+    // -- Security Actions --
     const handlePasswordSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (newPassword !== confirmPassword) {
@@ -57,7 +143,7 @@ export default function SettingsPage() {
             const data = await res.json();
             if (res.ok) {
                 setSecurityStatus('success');
-                setSecurityMessage('Password updated! Logging out...');
+                setSecurityMessage('Password matching records! Logging out...');
                 setTimeout(() => {
                     fetch('/api/auth/logout', { method: 'POST' }).then(() => router.push('/login'));
                 }, 2000);
@@ -71,28 +157,18 @@ export default function SettingsPage() {
         }
     };
 
-    const saveConfig = async (key: string, value: string) => {
-        if (!value) return;
-        setIsSavingConfig(key);
-        try {
-            const res = await fetch('/api/status/config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key, value }),
-            });
-            if (res.ok) {
-                toast.success(`${key} saved successfully`);
-                fetchConfig(); // Refresh status
-            } else {
-                toast.error(`Failed to save ${key}`);
-            }
-        } catch {
-            toast.error('Connection error');
-        } finally {
-            setIsSavingConfig(null);
+    const generateStrongPassword = () => {
+        const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+";
+        let retVal = "";
+        for (let i = 0; i < 16; ++i) {
+            retVal += charset.charAt(Math.floor(Math.random() * charset.length));
         }
+        setNewPassword(retVal);
+        setConfirmPassword(retVal);
+        toast.info('Generated strong password');
     };
 
+    // -- UI Components --
     const ConfigInput = ({ label, value, onChange, placeholder, type = "text", onSave, configKey }: any) => (
         <div className="space-y-1.5">
             <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -119,7 +195,7 @@ export default function SettingsPage() {
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 md:p-8">
-            <div className="max-w-5xl mx-auto space-y-8">
+            <div className="max-w-6xl mx-auto space-y-8">
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
@@ -131,70 +207,176 @@ export default function SettingsPage() {
                         </button>
                         <h1 className="text-3xl font-bold">System Settings</h1>
                     </div>
-                    <div className="hidden md:flex items-center gap-2 text-sm text-gray-500">
-                        <span className="w-2 h-2 rounded-full bg-green-500" />
-                        System Operational
-                    </div>
                 </div>
 
+                {/* Database Wizard Card (Only in Demo Mode) */}
+                {isDemo && (
+                    <div className="bg-gradient-to-br from-indigo-600 to-blue-700 rounded-3xl shadow-xl overflow-hidden text-white">
+                        <div className="p-8 md:p-10 flex flex-col md:flex-row gap-8 items-center">
+                            <div className="flex-1 space-y-4">
+                                <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 rounded-full text-xs font-bold uppercase tracking-widest">
+                                    <Sparkles className="h-3 w-3" />
+                                    Initial Setup
+                                </div>
+                                <h2 className="text-3xl font-bold">Activate Permanent Storage</h2>
+                                <p className="text-blue-100 max-w-lg">
+                                    You are currently in Demo mode. Connect a Database to unlock permanent storage, custom passwords, and AI persistence.
+                                </p>
+                            </div>
+
+                            <div className="w-full md:w-96 bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl text-gray-900 dark:text-white">
+                                {setupStep === 'input' ? (
+                                    <div className="space-y-4">
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-bold text-gray-400 uppercase">Database URL</label>
+                                            <input
+                                                value={dbUrl}
+                                                onChange={(e) => setDbUrl(e.target.value)}
+                                                placeholder="libsql://... or file:..."
+                                                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-bold text-gray-400 uppercase">Auth Token (Optional)</label>
+                                            <input
+                                                type="password"
+                                                value={dbToken}
+                                                onChange={(e) => setDbToken(e.target.value)}
+                                                placeholder="Turso secret token"
+                                                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
+                                            />
+                                        </div>
+
+                                        {testStatus === 'error' && (
+                                            <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs rounded-lg">
+                                                <AlertCircle className="h-4 w-4 shrink-0" />
+                                                <span>{testError}</span>
+                                            </div>
+                                        )}
+
+                                        <button
+                                            onClick={handleTestConnection}
+                                            disabled={testStatus === 'testing' || !dbUrl}
+                                            className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-2"
+                                        >
+                                            {testStatus === 'testing' ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Connect & Verify'}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-6">
+                                        <div className="flex items-center gap-3 text-green-600 font-bold">
+                                            <div className="p-2 bg-green-100 rounded-full"><CheckCircle2 className="h-6 w-6" /></div>
+                                            Test Successful!
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
+                                                <p className="text-xs text-gray-500 mb-3">Deploying on <strong>VPS / Docker</strong>?</p>
+                                                <button
+                                                    onClick={handleVpsSave}
+                                                    className="w-full py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold rounded-lg text-sm transition-all"
+                                                >
+                                                    Save Configuration Local
+                                                </button>
+                                            </div>
+
+                                            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-dashed border-blue-200 dark:border-blue-800">
+                                                <p className="text-xs text-blue-600 dark:text-blue-400 mb-3">Deploying on <strong>Vercel</strong>?</p>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            navigator.clipboard.writeText(`DATABASE_URL=${dbUrl}\nDATABASE_AUTH_TOKEN=${dbToken}`);
+                                                            toast.success('Variables copied to clipboard');
+                                                        }}
+                                                        className="flex-1 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-2"
+                                                    >
+                                                        <Copy className="h-3 w-3" /> Copy ENV
+                                                    </button>
+                                                    <a
+                                                        href="https://vercel.com/dashboard"
+                                                        target="_blank"
+                                                        className="p-2 bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-200 rounded-lg"
+                                                    >
+                                                        <Link className="h-4 w-4" />
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            onClick={() => setSetupStep('input')}
+                                            className="w-full text-xs text-gray-400 hover:text-gray-600"
+                                        >
+                                            ← Modify Credentials
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Sidebar: Status Overview */}
-                    <div className="lg:col-span-1 space-y-6">
-                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                            <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-                                <Database className="h-5 w-5 text-blue-500" />
-                                Connectivity
-                            </h2>
+                    {/* Status & Overview Column */}
+                    <div className="space-y-6">
+                        <section className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 shadow-sm">
+                            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6">Device Status</h2>
                             <div className="space-y-4">
-                                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
-                                    <div className="text-[10px] uppercase font-bold text-blue-600/60 dark:text-blue-400/60 mb-1">Current Backend</div>
-                                    <div className="font-mono text-sm font-bold truncate">
-                                        {configStatus?.activeStorage || 'Checking...'}
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`p-2 rounded-lg ${!isDemo ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
+                                            <Database className="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <div className="font-bold text-sm">Storage</div>
+                                            <div className="text-[10px] text-gray-400">{configStatus?.activeStorage || 'Unknown'}</div>
+                                        </div>
+                                    </div>
+                                    <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${!isDemo ? 'bg-green-500 text-white' : 'bg-gray-100 dark:bg-gray-900 text-gray-400'}`}>
+                                        {!isDemo ? 'PERSISTENT' : 'DEMO'}
                                     </div>
                                 </div>
 
-                                <div className="space-y-2">
-                                    {[
-                                        { label: 'Database', connected: configStatus?.database?.connected, info: configStatus?.database?.type },
-                                        { label: 'Cloud AI', connected: configStatus?.ai?.openai, info: 'OpenAI' },
-                                        { label: 'S3 Sync', connected: configStatus?.s3?.connected, info: 'Compatible' },
-                                    ].map((stat) => (
-                                        <div key={stat.label} className="flex items-center justify-between p-2 text-sm">
-                                            <span className="text-gray-500">{stat.label}</span>
-                                            <div className="flex items-center gap-2">
-                                                <span className={`w-1.5 h-1.5 rounded-full ${stat.connected ? 'bg-green-500' : 'bg-gray-300'}`} />
-                                                <span className={stat.connected ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-400'}>
-                                                    {stat.connected ? 'Active' : 'Missing'}
-                                                </span>
-                                            </div>
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`p-2 rounded-lg ${configStatus?.ai?.openai ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-400'}`}>
+                                            <Sparkles className="h-5 w-5" />
                                         </div>
-                                    ))}
+                                        <div>
+                                            <div className="font-bold text-sm">AI Assistant</div>
+                                            <div className="text-[10px] text-gray-400">{configStatus?.ai?.openai ? 'Active' : 'Unconfigured'}</div>
+                                        </div>
+                                    </div>
+                                    {configStatus?.ai?.openai && <CheckCircle2 className="h-4 w-4 text-green-500" />}
                                 </div>
                             </div>
-                        </div>
+                        </section>
 
-                        {/* Note explaining UI priority */}
-                        <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-2xl border border-amber-200/50 dark:border-amber-700/50 text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
-                            <p className="font-bold flex items-center gap-1.5 mb-1.5">
-                                <Shield className="h-3.5 w-3.5" />
-                                HYBRID CONFIGURATION
-                            </p>
-                            Settings defined in this UI take priority over server environment variables. Sensitive data like API Keys are encrypted before being stored in your database.
+                        <div className="p-5 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl border border-indigo-100 dark:border-indigo-800 text-xs text-indigo-700 dark:text-indigo-300 leading-relaxed space-y-2">
+                            <div className="font-bold flex items-center gap-2">
+                                <Info className="h-4 w-4" /> Hybrid Logic
+                            </div>
+                            <p>Settings saved here are encrypted and priority-loaded over environment variables.</p>
                         </div>
                     </div>
 
-                    {/* Main Settings Area */}
+                    {/* Main Settings Body */}
                     <div className="lg:col-span-2 space-y-8">
-                        {/* Section: AI Configuration */}
-                        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                                <h3 className="font-bold flex items-center gap-2">
-                                    <Sparkles className="h-4 w-4 text-purple-500" />
-                                    AI Writing Assistant
-                                </h3>
-                                {configStatus?.ai?.openai && <CheckCircle2 className="h-4 w-4 text-green-500" />}
-                            </div>
-                            <div className="p-6 space-y-4">
+                        {/* Section: AI */}
+                        <section className="bg-white dark:bg-gray-800 rounded-3xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm relative overflow-hidden group">
+                            {isDemo && (
+                                <div className="absolute inset-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm z-10 flex items-center justify-center">
+                                    <div className="text-center p-6 space-y-3">
+                                        <Terminal className="h-8 w-8 mx-auto text-blue-500" />
+                                        <p className="text-sm font-bold text-gray-600 dark:text-gray-300">Connect DB to Unlock AI Persistence</p>
+                                    </div>
+                                </div>
+                            )}
+                            <h3 className="text-xl font-bold mb-6 flex items-center gap-3">
+                                <Sparkles className="h-6 w-6 text-purple-500" />
+                                Writing Assistant
+                            </h3>
+                            <div className="space-y-5">
                                 <ConfigInput
                                     label="OpenAI API Key"
                                     value={aiKey}
@@ -216,72 +398,85 @@ export default function SettingsPage() {
                         </section>
 
                         {/* Section: Cloud Storage (S3) */}
-                        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                                <h3 className="font-bold flex items-center gap-2">
-                                    <Cloud className="h-4 w-4 text-blue-500" />
-                                    External Media Storage (S3)
-                                </h3>
-                                {configStatus?.s3?.connected && <CheckCircle2 className="h-4 w-4 text-green-500" />}
-                            </div>
-                            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <section className="bg-white dark:bg-gray-800 rounded-3xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm relative overflow-hidden">
+                            {isDemo && (
+                                <div className="absolute inset-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm z-10 flex items-center justify-center">
+                                    <div className="text-center p-6 space-y-3">
+                                        <Cloud className="h-8 w-8 mx-auto text-blue-500" />
+                                        <p className="text-sm font-bold text-gray-600 dark:text-gray-300">Connect DB to Unlock Storage Sync</p>
+                                    </div>
+                                </div>
+                            )}
+                            <h3 className="text-xl font-bold mb-6 flex items-center gap-3">
+                                <Cloud className="h-6 w-6 text-blue-500" />
+                                External Media Sync (S3)
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                 <div className="md:col-span-2">
                                     <ConfigInput label="Endpoint URL" value={s3Endpoint} onChange={setS3Endpoint} placeholder="https://..." configKey="S3_ENDPOINT" onSave={saveConfig} />
                                 </div>
-                                <ConfigInput label="Region" value={s3Region} onChange={setS3Region} placeholder="auto / us-east-1" configKey="S3_REGION" onSave={saveConfig} />
-                                <ConfigInput label="Bucket Name" value={s3Bucket} onChange={setS3Bucket} placeholder="my-notes-bucket" configKey="S3_BUCKET" onSave={saveConfig} />
+                                <ConfigInput label="Region" value={s3Region} onChange={setS3Region} placeholder="auto" configKey="S3_REGION" onSave={saveConfig} />
+                                <ConfigInput label="Bucket Name" value={s3Bucket} onChange={setS3Bucket} placeholder="my-notes" configKey="S3_BUCKET" onSave={saveConfig} />
                                 <ConfigInput label="Access Key ID" value={s3AccessKey} onChange={setS3AccessKey} placeholder="AKIA..." configKey="S3_ACCESS_KEY_ID" onSave={saveConfig} />
-                                <ConfigInput label="Secret Access Key" value={s3SecretKey} onChange={setS3SecretKey} placeholder="Required" type="password" configKey="S3_SECRET_ACCESS_KEY" onSave={saveConfig} />
+                                <ConfigInput label="Secret Key" value={s3SecretKey} onChange={setS3SecretKey} placeholder="Required" type="password" configKey="S3_SECRET_ACCESS_KEY" onSave={saveConfig} />
                             </div>
                         </section>
 
                         {/* Section: Security */}
-                        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                                <h3 className="font-bold flex items-center gap-2">
-                                    <Shield className="h-4 w-4 text-red-500" />
-                                    Access & Security
-                                </h3>
-                            </div>
-                            <div className="p-6">
-                                {configStatus?.activeStorage === 'Local Memory (Demo)' ? (
-                                    <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300">
-                                        ⚠️ You are currently in Demo Mode. Connect a Database or Turso to enable password management and long-term storage.
+                        <section className="bg-white dark:bg-gray-800 rounded-3xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm relative overflow-hidden">
+                            {isDemo && (
+                                <div className="absolute inset-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm z-10 flex items-center justify-center text-center">
+                                    <div className="p-6 space-y-3">
+                                        <Shield className="h-8 w-8 mx-auto text-red-500" />
+                                        <p className="text-sm font-bold text-gray-600 dark:text-gray-300 transition-all group-hover:scale-105">Connect DB to Manage Access</p>
                                     </div>
-                                ) : (
-                                    <form onSubmit={handlePasswordSubmit} className="space-y-4">
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Current Password</label>
-                                                <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900/50 focus:ring-2 focus:ring-blue-500 outline-none" />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">New Password</label>
-                                                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={6} className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900/50 focus:ring-2 focus:ring-blue-500 outline-none" />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Confirm New</label>
-                                                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900/50 focus:ring-2 focus:ring-blue-500 outline-none" />
-                                            </div>
+                                </div>
+                            )}
+                            <h3 className="text-xl font-bold mb-6 flex items-center gap-3">
+                                <Shield className="h-6 w-6 text-red-500" />
+                                System Security
+                            </h3>
+                            <form onSubmit={handlePasswordSubmit} className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                    <div className="md:col-span-2 space-y-1.5">
+                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Current Admin Password</label>
+                                        <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required className="w-full px-3 py-3 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <div className="flex justify-between items-center">
+                                            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">New Password</label>
+                                            <button
+                                                type="button"
+                                                onClick={generateStrongPassword}
+                                                className="text-[10px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                                            >
+                                                <Wand2 className="h-3 w-3" /> Auto-suggest
+                                            </button>
                                         </div>
+                                        <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={6} className="w-full px-3 py-3 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Confirm New Password</label>
+                                        <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className="w-full px-3 py-3 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" />
+                                    </div>
+                                </div>
 
-                                        {securityMessage && (
-                                            <div className={`p-3 rounded-lg text-xs font-medium ${securityStatus === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                {securityMessage}
-                                            </div>
-                                        )}
-
-                                        <button
-                                            type="submit"
-                                            disabled={securityStatus === 'loading'}
-                                            className="w-full md:w-auto px-6 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold rounded-lg hover:opacity-90 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-                                        >
-                                            {securityStatus === 'loading' && <Loader2 className="h-4 w-4 animate-spin" />}
-                                            Update System Password
-                                        </button>
-                                    </form>
+                                {securityMessage && (
+                                    <div className={`p-4 rounded-xl text-xs font-bold flex items-center gap-2 ${securityStatus === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                        {securityStatus === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+                                        {securityMessage}
+                                    </div>
                                 )}
-                            </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={securityStatus === 'loading'}
+                                    className="w-full md:w-auto px-10 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold rounded-xl shadow-lg hover:opacity-90 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                                >
+                                    {securityStatus === 'loading' && <Loader2 className="h-4 w-4 animate-spin" />}
+                                    Apply Password Update
+                                </button>
+                            </form>
                         </section>
                     </div>
                 </div>
