@@ -1,22 +1,20 @@
 import { list, put, del } from '@vercel/blob';
 import type { StorageAdapter, Note, NoteMeta } from '../types';
+import { getWelcomeNote, WELCOME_NOTE_ID } from '../welcome-note';
 
 export class BlobAdapter implements StorageAdapter {
     private readonly prefix = 'notes/';
 
     async list(): Promise<NoteMeta[]> {
         const { blobs } = await list({ prefix: this.prefix });
+        if (blobs.length === 0) {
+            const welcome = getWelcomeNote();
+            return [{ id: welcome.id, title: welcome.title, createdAt: welcome.createdAt, updatedAt: welcome.updatedAt }];
+        }
+
         const notes: NoteMeta[] = [];
 
         for (const blob of blobs) {
-            // Each blob is notes/{id}.json
-            // To get title and timestamps, we could either fetch each file (slow)
-            // or encode metadata in the filename, or use a separate index.
-            // For MVP with small # of notes, we catch title from content or metadata.
-            // Optimization: fetch them in parallel.
-            const id = blob.pathname.replace(this.prefix, '').replace('.json', '');
-
-            // Let's fetch the metadata. In a real app, we'd use a more efficient index.
             const response = await fetch(blob.url);
             const data = await response.json();
             notes.push({
@@ -33,11 +31,15 @@ export class BlobAdapter implements StorageAdapter {
     async get(id: string): Promise<Note | null> {
         try {
             const { blobs } = await list({ prefix: `${this.prefix}${id}.json` });
-            if (blobs.length === 0) return null;
+            if (blobs.length === 0) {
+                if (id === WELCOME_NOTE_ID) return getWelcomeNote();
+                return null;
+            }
 
             const response = await fetch(blobs[0].url);
             return await response.json();
-        } catch (e) {
+        } catch {
+            if (id === WELCOME_NOTE_ID) return getWelcomeNote();
             return null;
         }
     }
