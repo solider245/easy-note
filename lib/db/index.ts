@@ -12,13 +12,27 @@ export async function getDb(): Promise<AnyDrizzle> {
 
     const url = process.env.DATABASE_URL || process.env.TURSO_DATABASE_URL;
     if (!url) {
-        // Fallback or error handled by caller (getStorage)
         throw new Error('No database URL found');
     }
     const isSQLite = url.startsWith('libsql://') || url.startsWith('file:');
 
     if (!_db) {
         if (isSQLite) {
+            // Ensure directory exists for file: URLs
+            if (url.startsWith('file:')) {
+                try {
+                    const { existsSync, mkdirSync } = await import('fs');
+                    const { dirname } = await import('path');
+                    const filePath = url.replace('file:', '');
+                    let dir = dirname(filePath);
+                    if (!existsSync(dir)) {
+                        mkdirSync(dir, { recursive: true });
+                    }
+                } catch (e) {
+                    console.error('Failed to ensure database directory exists:', e);
+                }
+            }
+
             const { createClient } = await import('@libsql/client');
             const { drizzle } = await import('drizzle-orm/libsql');
             const client = createClient({

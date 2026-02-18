@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  easy-note:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: easy-note
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/app/data/note.db
+      - ADMIN_PASSWORD=admin123 # Change this on first login!
+      - CONFIG_ENCRYPTION_KEY=my-super-secret-key-32-chars-max
+    volumes:
+      - easy-note-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  easy-note-data:
