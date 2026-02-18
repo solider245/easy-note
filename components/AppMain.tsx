@@ -10,7 +10,7 @@ import { Note, NoteMeta } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import debounce from 'lodash.debounce';
 import { toast } from 'sonner';
-import { Pin } from 'lucide-react';
+import { Pin, Trash2, Settings, Download, LogOut, Menu } from 'lucide-react';
 
 export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: boolean }) {
   const [notes, setNotes] = useState<NoteMeta[]>([]);
@@ -212,7 +212,7 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        <div className="w-80 flex-shrink-0 flex flex-col border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className={`w-full md:w-80 flex-shrink-0 flex flex-col border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 ${selectedNote ? 'hidden md:flex' : 'flex'}`}>
           <div className="flex-1 overflow-hidden">
             <NoteList
               notes={notes}
@@ -230,53 +230,64 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
           </div>
           <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
             <button
+              onClick={() => router.push('/trash')}
+              className="w-full py-2 px-4 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors flex items-center justify-center gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              Trash
+            </button>
+            <button
               onClick={() => router.push('/settings')}
               className="w-full py-2 px-4 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors flex items-center justify-center gap-2"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
+              <Settings className="h-4 w-4" />
               Settings
             </button>
             <button
               onClick={handleExport}
               className="w-full py-2 px-4 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors flex items-center justify-center gap-2"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
+              <Download className="h-4 w-4" />
               Export JSON
             </button>
             <button
               onClick={handleLogout}
-              className="w-full py-2 px-4 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+              className="w-full py-2 px-4 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors flex items-center justify-center gap-2"
             >
+              <LogOut className="h-4 w-4" />
               Sign Out
             </button>
           </div>
         </div>
 
         {/* Editor Area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className={`flex-1 flex flex-col overflow-hidden ${!selectedNote ? 'hidden md:flex' : 'flex'}`}>
           {selectedNote ? (
             <div className="flex flex-col h-full">
-              <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                <input
-                  className="text-2xl font-bold bg-transparent border-none outline-none w-full"
-                  value={selectedNote.title}
-                  onChange={async (e) => {
-                    const newTitle = e.target.value;
-                    setSelectedNote({ ...selectedNote, title: newTitle });
-                    await fetch(`/api/notes/${selectedNote.id}`, {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ title: newTitle }),
-                    });
-                    setNotes(notes.map(n => n.id === selectedNote.id ? { ...n, title: newTitle } : n));
-                  }}
-                />
-                <div className="flex items-center gap-1">
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <button
+                    onClick={() => setSelectedNote(null)}
+                    className="md:hidden p-2 -ml-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                  >
+                    <Menu className="h-5 w-5" />
+                  </button>
+                  <input
+                    className="text-xl md:text-2xl font-bold bg-transparent border-none outline-none w-full truncate"
+                    value={selectedNote.title}
+                    onChange={async (e) => {
+                      const newTitle = e.target.value;
+                      setSelectedNote({ ...selectedNote, title: newTitle });
+                      await fetch(`/api/notes/${selectedNote.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title: newTitle }),
+                      });
+                      setNotes(notes.map(n => n.id === selectedNote.id ? { ...n, title: newTitle } : n));
+                    }}
+                  />
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
                   {isSaving && (
                     <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-50 dark:bg-gray-800/50 rounded-full border border-gray-100 dark:border-gray-700/50 mr-2">
                       <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />

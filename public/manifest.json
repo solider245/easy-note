@@ -1,0 +1,18 @@
+{
+    "name": "Easy Note",
+    "short_name": "Easy Note",
+    "description": "Sleek, Secure, and AI-Powered Minimalist Note Taking.",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#2563eb",
+    "icons": [
+        {
+            "src": "/icon.png",
+            "sizes": "1024x1024",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ],
+    "orientation": "portrait"
+}

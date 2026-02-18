@@ -42,8 +42,16 @@ export class MemoryAdapter implements StorageAdapter {
         this.notes.set(note.id, note);
     }
 
-    async del(id: string): Promise<void> {
-        this.notes.delete(id);
+    async del(id: string, purge?: boolean): Promise<void> {
+        if (purge) {
+            this.notes.delete(id);
+        } else {
+            const note = this.notes.get(id);
+            if (note) {
+                note.deletedAt = Date.now();
+                this.notes.set(id, note);
+            }
+        }
     }
 
     async getUsage(): Promise<{ used: number; total: number }> {

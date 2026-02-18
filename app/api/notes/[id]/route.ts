@@ -49,7 +49,10 @@ export async function DELETE(
     try {
         const { id } = await params;
         const storage = await getStorage();
-        await storage.del(id);
+        const { searchParams } = new URL(request.url);
+        const purge = searchParams.get('purge') === 'true';
+
+        await storage.del(id, purge);
         return NextResponse.json({ success: true });
     } catch (e: unknown) {
         return NextResponse.json({ error: (e as Error).message }, { status: 500 });

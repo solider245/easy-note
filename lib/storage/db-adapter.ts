@@ -4,7 +4,8 @@ import { getWelcomeNote, WELCOME_NOTE_ID } from '../welcome-note';
 
 // We use dynamic imports for schemas to avoid loading both at startup
 async function getSchema() {
-    const url = process.env.DATABASE_URL!;
+    const { configService } = await import('../config/config-service');
+    const url = await configService.get('DATABASE_URL') || await configService.get('TURSO_DATABASE_URL') || '';
     if (url.startsWith('libsql://') || url.startsWith('file:')) {
         return await import('../db/schema');
     } else {
@@ -72,8 +73,8 @@ export class DbAdapter implements StorageAdapter {
     async save(note: Note): Promise<void> {
         const db = await getDb();
         const { notes } = await getSchema();
-
-        const url = process.env.DATABASE_URL!;
+        const { configService } = await import('../config/config-service');
+        const url = await configService.get('DATABASE_URL') || await configService.get('TURSO_DATABASE_URL') || '';
         const isSQLite = url.startsWith('libsql://') || url.startsWith('file:');
 
         const values = {
@@ -138,12 +139,18 @@ export class DbAdapter implements StorageAdapter {
         }));
     }
 
-    async del(id: string): Promise<void> {
+    async del(id: string, purge?: boolean): Promise<void> {
         const db = await getDb();
         const { notes } = await getSchema();
         const { eq } = await import('drizzle-orm');
-        // Soft delete
-        await (db as any).update(notes).set({ deletedAt: Date.now() }).where(eq(notes.id, id));
+
+        if (purge) {
+            // Hard delete
+            await (db as any).delete(notes).where(eq(notes.id, id));
+        } else {
+            // Soft delete
+            await (db as any).update(notes).set({ deletedAt: Date.now() }).where(eq(notes.id, id));
+        }
     }
 
     async getUsage(): Promise<{ used: number; total: number }> {

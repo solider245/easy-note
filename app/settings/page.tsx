@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
     Shield, Database, Cloud, Sparkles, ChevronLeft, Save, Loader2,
-    CheckCircle2, AlertCircle, Copy, Link, Wand2, Terminal, Info
+    CheckCircle2, AlertCircle, Copy, Link, Wand2, Terminal, Info,
+    HardDrive, Download, Upload
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -38,6 +39,10 @@ export default function SettingsPage() {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [securityStatus, setSecurityStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
     const [securityMessage, setSecurityMessage] = useState('');
+
+    // -- State: Data Management --
+    const [isExporting, setIsExporting] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
 
     const fetchConfig = async () => {
         try {
@@ -122,6 +127,57 @@ export default function SettingsPage() {
             toast.error('Connection error');
         } finally {
             setIsSavingConfig(null);
+        }
+    };
+
+    // -- Data Actions --
+    const handleExport = async () => {
+        setIsExporting(true);
+        try {
+            const res = await fetch('/api/export');
+            if (!res.ok) throw new Error('Export failed');
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `easy-note-backup-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            toast.success('Export successful');
+        } catch (e) {
+            toast.error('Failed to export data');
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
+    const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsImporting(true);
+        try {
+            const text = await file.text();
+            const notes = JSON.parse(text);
+
+            const res = await fetch('/api/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(notes),
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                toast.success(data.message);
+            } else {
+                toast.error(data.error || 'Import failed');
+            }
+        } catch (e) {
+            toast.error('Failed to parse import file');
+        } finally {
+            setIsImporting(false);
+            e.target.value = '';
         }
     };
 
@@ -419,6 +475,56 @@ export default function SettingsPage() {
                                 <ConfigInput label="Bucket Name" value={s3Bucket} onChange={setS3Bucket} placeholder="my-notes" configKey="S3_BUCKET" onSave={saveConfig} />
                                 <ConfigInput label="Access Key ID" value={s3AccessKey} onChange={setS3AccessKey} placeholder="AKIA..." configKey="S3_ACCESS_KEY_ID" onSave={saveConfig} />
                                 <ConfigInput label="Secret Key" value={s3SecretKey} onChange={setS3SecretKey} placeholder="Required" type="password" configKey="S3_SECRET_ACCESS_KEY" onSave={saveConfig} />
+                            </div>
+                        </section>
+
+                        {/* Section: Data Management */}
+                        <section className="bg-white dark:bg-gray-800 rounded-3xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm relative overflow-hidden">
+                            {isDemo && (
+                                <div className="absolute inset-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm z-10 flex items-center justify-center">
+                                    <div className="text-center p-6 space-y-3">
+                                        <HardDrive className="h-8 w-8 mx-auto text-blue-500" />
+                                        <p className="text-sm font-bold text-gray-600 dark:text-gray-300">Connect DB to Unlock Migration</p>
+                                    </div>
+                                </div>
+                            )}
+                            <h3 className="text-xl font-bold mb-2 flex items-center gap-3">
+                                <HardDrive className="h-6 w-6 text-indigo-500" />
+                                Data Portability
+                            </h3>
+                            <p className="text-sm text-gray-500 mb-8">Export your data for backup or migrate from another instance.</p>
+
+                            <div className="flex flex-col md:flex-row gap-4">
+                                <button
+                                    onClick={handleExport}
+                                    disabled={isExporting}
+                                    className="flex-1 px-6 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl flex items-center gap-4 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all group"
+                                >
+                                    <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-xl group-hover:scale-110 transition-transform">
+                                        {isExporting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
+                                    </div>
+                                    <div className="text-left">
+                                        <div className="font-bold text-sm">Export Backup</div>
+                                        <div className="text-[10px] text-gray-400">Download all notes as .json</div>
+                                    </div>
+                                </button>
+
+                                <label className="flex-1 px-6 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl flex items-center gap-4 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all group cursor-pointer">
+                                    <input
+                                        type="file"
+                                        accept=".json"
+                                        onChange={handleImport}
+                                        disabled={isImporting}
+                                        className="hidden"
+                                    />
+                                    <div className="p-3 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 rounded-xl group-hover:scale-110 transition-transform">
+                                        {isImporting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
+                                    </div>
+                                    <div className="text-left">
+                                        <div className="font-bold text-sm">Import from JSON</div>
+                                        <div className="text-[10px] text-gray-400">Restore or merge previous backups</div>
+                                    </div>
+                                </label>
                             </div>
                         </section>
 

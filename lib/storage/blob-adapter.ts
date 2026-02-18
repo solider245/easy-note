@@ -76,10 +76,18 @@ export class BlobAdapter implements StorageAdapter {
         });
     }
 
-    async del(id: string): Promise<void> {
-        const { blobs } = await list({ prefix: `${this.prefix}${id}.json` });
-        if (blobs.length > 0) {
-            await del(blobs[0].url);
+    async del(id: string, purge?: boolean): Promise<void> {
+        if (purge) {
+            const { blobs } = await list({ prefix: `${this.prefix}${id}.json` });
+            if (blobs.length > 0) {
+                await del(blobs[0].url);
+            }
+        } else {
+            const note = await this.get(id);
+            if (note) {
+                note.deletedAt = Date.now();
+                await this.save(note);
+            }
         }
     }
 
