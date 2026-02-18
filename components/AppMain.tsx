@@ -127,32 +127,16 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
     return <div className="flex h-screen items-center justify-center">Loading...</div>;
   }
 
-  if (storageStatus === 'error') {
-    return (
-      <div className="flex h-screen flex-col items-center justify-center p-4 text-center bg-red-50 dark:bg-red-900/10">
-        <div className="max-w-md space-y-4">
-          <div className="text-red-600 dark:text-red-400 text-5xl mb-4 text-center">⚠️</div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Storage Error</h1>
-          <p className="text-gray-600 dark:text-gray-300">{errorMessage}</p>
-          <div className="pt-4">
-            <button
-              onClick={() => window.location.reload()}
-              className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg transition-colors font-medium"
-            >
-              Refresh Page
-            </button>
-          </div>
-          <p className="text-sm text-gray-500 pt-8">
-            Note: This usually happens if Vercel Blob storage is not connected to your project.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const isDemoMode = storageStatus === 'error';
 
   return (
     <div className="flex h-screen flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       {isUsingDefaultPass && <SecurityWarning />}
+      {isDemoMode && (
+        <div className="bg-amber-500 px-4 py-1 text-white text-center text-xs font-bold uppercase tracking-wider">
+          Demo Mode: Changes will not be saved. Connect Vercel Blob to enable persistent storage.
+        </div>
+      )}
       <UsageBanner used={usage.used} total={usage.total} />
 
       <div className="flex flex-1 overflow-hidden">

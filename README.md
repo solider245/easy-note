@@ -14,7 +14,7 @@ A premium, near-zero-config Markdown note app with two-phase storage.
 
 ### 1. One-click Deploy
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/YOUR_ORG/easy-note)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/solider245/easy-note&stores=[{"type":"blob"}])
 
 ### 2. Setup Storage
 
