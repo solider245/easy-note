@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkPasswordWithDb } from '@/lib/auth';
+import { checkPasswordWithDb, generateAuthToken } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
     const { password } = await request.json();
 
     if (await checkPasswordWithDb(password)) {
         const response = NextResponse.json({ success: true });
-        // In a real app, use a secure signed token
-        response.cookies.set('auth-token', 'authenticated', {
+        // Use HMAC-signed token to prevent cookie forgery
+        response.cookies.set('auth-token', generateAuthToken(), {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',

@@ -101,12 +101,18 @@ export class BlobAdapter implements StorageAdapter {
     }
 
     async exportAll(): Promise<Note[]> {
-        const metas = await this.list();
+        // Fetch ALL blobs including deleted ones (list() filters out deleted)
+        const { blobs } = await list({ prefix: this.prefix });
         const notes: Note[] = [];
-        for (const meta of metas) {
-            const note = await this.get(meta.id);
-            if (note) notes.push(note);
+        for (const blob of blobs) {
+            try {
+                const response = await fetch(blob.url);
+                const note = await response.json();
+                if (note && note.id) notes.push(note);
+            } catch {
+                // skip corrupted blobs
+            }
         }
-        return notes;
+        return notes.sort((a, b) => b.updatedAt - a.updatedAt);
     }
 }

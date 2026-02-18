@@ -6,7 +6,14 @@ export async function GET() {
         const storage = await getStorage();
         // Try a simple list to check connectivity
         await storage.list();
-        return NextResponse.json({ status: 'connected' });
+
+        // Fetch real usage if available
+        let usage: { used: number; total: number } | undefined;
+        if (storage.getUsage) {
+            usage = await storage.getUsage();
+        }
+
+        return NextResponse.json({ status: 'connected', usage });
     } catch (e: unknown) {
         return NextResponse.json({
             status: 'error',

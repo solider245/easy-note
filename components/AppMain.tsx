@@ -16,7 +16,7 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
   const [notes, setNotes] = useState<NoteMeta[]>([]);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [loading, setLoading] = useState(true);
-  const [usage] = useState({ used: 0, total: 250 * 1024 * 1024 });
+  const [usage, setUsage] = useState({ used: 0, total: 250 * 1024 * 1024 });
   const [isSaving, setIsSaving] = useState(false);
   const [config, setConfig] = useState<any>(null);
   const router = useRouter();
@@ -41,6 +41,12 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
         const configRes = await fetch('/api/status/config');
         const configData = await configRes.json();
         setConfig(configData);
+        // Fetch real storage usage
+        const usageRes = await fetch('/api/status');
+        if (usageRes.ok) {
+          const usageData = await usageRes.json();
+          if (usageData.usage) setUsage(usageData.usage);
+        }
       } catch (e) {
         console.error('Initialization failed', e);
       } finally {
@@ -49,6 +55,18 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
     };
     init();
   }, [fetchNotes]);
+
+  // Debounced title update
+  const debouncedTitleUpdate = useMemo(
+    () => debounce(async (id: string, title: string) => {
+      await fetch(`/api/notes/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+    }, 600),
+    []
+  );
 
   // Debounced update functions
   const debouncedUpdate = useMemo(
@@ -275,15 +293,11 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
                   <input
                     className="text-xl md:text-2xl font-bold bg-transparent border-none outline-none w-full truncate"
                     value={selectedNote.title}
-                    onChange={async (e) => {
+                    onChange={(e) => {
                       const newTitle = e.target.value;
                       setSelectedNote({ ...selectedNote, title: newTitle });
-                      await fetch(`/api/notes/${selectedNote.id}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ title: newTitle }),
-                      });
                       setNotes(notes.map(n => n.id === selectedNote.id ? { ...n, title: newTitle } : n));
+                      debouncedTitleUpdate(selectedNote.id, newTitle);
                     }}
                   />
                 </div>

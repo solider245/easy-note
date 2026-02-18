@@ -89,7 +89,18 @@ export class DbAdapter implements StorageAdapter {
         };
 
         if (isSQLite) {
-            const { sql } = await import('drizzle-orm');
+            await (db as any).insert(notes).values(values).onConflictDoUpdate({
+                target: notes.id,
+                set: {
+                    title: note.title,
+                    content: note.content,
+                    updatedAt: note.updatedAt,
+                    isPinned: values.isPinned,
+                    deletedAt: values.deletedAt,
+                },
+            });
+        } else {
+            // PostgreSQL upsert
             await (db as any).insert(notes).values(values).onConflictDoUpdate({
                 target: notes.id,
                 set: {
