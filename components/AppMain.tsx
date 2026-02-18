@@ -1,12 +1,15 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import NoteList from '@/components/NoteList';
 import MilkdownEditor from '@/components/Editor';
+import { LoadingSkeleton } from '@/components/Skeleton';
 import SecurityWarning from '@/components/SecurityWarning';
 import UsageBanner from '@/components/UsageBanner';
 import { Note, NoteMeta } from '@/lib/types';
 import { useRouter } from 'next/navigation';
+import debounce from 'lodash.debounce';
+import { toast } from 'sonner';
 
 export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: boolean }) {
   const [notes, setNotes] = useState<NoteMeta[]>([]);
@@ -15,6 +18,7 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
   const [usage] = useState({ used: 0, total: 250 * 1024 * 1024 });
   const [storageStatus, setStorageStatus] = useState<'checking' | 'connected' | 'error'>('checking');
   const [errorMessage, setErrorMessage] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const router = useRouter();
 
   // Load notes list
@@ -52,6 +56,53 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
     init();
   }, [fetchNotes]);
 
+  // Debounced update functions
+  const debouncedUpdate = useMemo(
+    () => debounce(async (id: string, updates: Partial<Note>, currentTitle?: string) => {
+      setIsSaving(true);
+      try {
+        const res = await fetch(`/api/notes/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates),
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          // Update the list entry as well
+          setNotes(prev => prev.map(n => n.id === updated.id ? { ...n, ...updates, updatedAt: updated.updatedAt } : n));
+
+          // Smart Titling: If it's a new note and has enough content, suggest a title
+          if (currentTitle === 'New Note' && updates.content && updates.content.length > 50) {
+            const aiRes = await fetch('/api/ai/process', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ content: updates.content, type: 'suggest-title' }),
+            });
+            if (aiRes.ok) {
+              const { result: suggestedTitle } = await aiRes.json();
+              if (suggestedTitle && suggestedTitle !== 'New Note') {
+                // Update title automatically
+                await fetch(`/api/notes/${id}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ title: suggestedTitle }),
+                });
+                setNotes(prev => prev.map(n => n.id === id ? { ...n, title: suggestedTitle } : n));
+                setSelectedNote(prev => prev?.id === id ? { ...prev, title: suggestedTitle } : prev);
+                toast.info(`Note automatically titled: ${suggestedTitle}`);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        toast.error('Failed to auto-save note');
+      } finally {
+        setIsSaving(false);
+      }
+    }, 1000),
+    []
+  );
+
   const handleSelectNote = async (id: string) => {
     try {
       const res = await fetch(`/api/notes/${id}`);
@@ -60,7 +111,7 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
         setSelectedNote(data);
       }
     } catch {
-      console.error('Failed to fetch note');
+      toast.error('Failed to load note');
     }
   };
 
@@ -75,30 +126,21 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
         const newNote = await res.json();
         setNotes([newNote, ...notes]);
         setSelectedNote(newNote);
+        toast.success('Note created');
       }
     } catch {
-      console.error('Failed to create note');
+      toast.error('Failed to create note');
     }
   };
 
-  const handleUpdateNote = async (content: string) => {
+  const handleUpdateNote = (content: string) => {
     if (!selectedNote) return;
 
-    try {
-      const res = await fetch(`/api/notes/${selectedNote.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setSelectedNote(updated);
-        // Only update the list meta if title changed (here it doesn't from editor)
-        setNotes(notes.map(n => n.id === updated.id ? { ...n, updatedAt: updated.updatedAt } : n));
-      }
-    } catch {
-      console.error('Failed to update note');
-    }
+    // Immediate UI update
+    setSelectedNote({ ...selectedNote, content });
+
+    // Debounced network update
+    debouncedUpdate(selectedNote.id, { content }, selectedNote.title);
   };
 
   const handleDeleteNote = async (id: string) => {
@@ -108,9 +150,10 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
       if (res.ok) {
         if (selectedNote?.id === id) setSelectedNote(null);
         setNotes(notes.filter(n => n.id !== id));
+        toast.success('Note deleted');
       }
     } catch {
-      console.error('Failed to delete note');
+      toast.error('Failed to delete note');
     }
   };
 
@@ -124,7 +167,7 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
   };
 
   if (loading) {
-    return <div className="flex h-screen items-center justify-center">Loading...</div>;
+    return <LoadingSkeleton />;
   }
 
   const isDemoMode = storageStatus === 'error';
@@ -133,21 +176,38 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
     <div className="flex h-screen flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       {isUsingDefaultPass && <SecurityWarning />}
       {isDemoMode && (
-        <div className="bg-amber-500 px-4 py-1 text-white text-center text-xs font-bold uppercase tracking-wider">
-          Demo Mode: Changes will not be saved. Connect Vercel Blob to enable persistent storage.
+        <div className="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-4 py-2 flex items-center justify-center gap-2">
+          <span className="text-amber-800 dark:text-amber-300 text-xs font-medium">
+            ⚠️ <strong>Guest Mode:</strong> Changes are temporary. Connect a database or Vercel Blob for persistent storage.
+          </span>
+          <button
+            onClick={() => window.open('https://github.com/solider245/easy-note#deployment', '_blank')}
+            className="text-[10px] bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 px-2 py-0.5 rounded hover:bg-amber-300 dark:hover:bg-amber-700 transition-colors uppercase font-bold"
+          >
+            Setup Guide
+          </button>
         </div>
       )}
       <UsageBanner used={usage.used} total={usage.total} />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        <div className="w-80 flex-shrink-0">
-          <NoteList
-            notes={notes}
-            selectedId={selectedNote?.id || null}
-            onSelect={handleSelectNote}
-            onNew={handleCreateNote}
-          />
+        <div className="w-80 flex-shrink-0 flex flex-col border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <div className="flex-1 overflow-hidden">
+            <NoteList
+              notes={notes}
+              selectedId={selectedNote?.id || null}
+              onSelect={handleSelectNote}
+              onNew={handleCreateNote}
+              onSearch={async (query) => {
+                const res = await fetch(`/api/notes${query ? `?q=${encodeURIComponent(query)}` : ''}`);
+                if (res.ok) {
+                  const filtered = await res.json();
+                  setNotes(filtered);
+                }
+              }}
+            />
+          </div>
           <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
             <button
               onClick={() => router.push('/settings')}
@@ -198,6 +258,12 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
                   }}
                 />
                 <div className="flex items-center gap-1">
+                  {isSaving && (
+                    <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-50 dark:bg-gray-800/50 rounded-full border border-gray-100 dark:border-gray-700/50 mr-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                      <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Saving</span>
+                    </div>
+                  )}
                   <button
                     onClick={async () => {
                       const res = await fetch('/api/ai/process', {

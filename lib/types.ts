@@ -3,6 +3,8 @@ export interface NoteMeta {
   title: string;
   createdAt: number;
   updatedAt: number;
+  isPinned: boolean;
+  deletedAt: number | null;
 }
 
 export interface Note extends NoteMeta {
@@ -14,7 +16,7 @@ export interface StorageAdapter {
   list(): Promise<NoteMeta[]>;          // 仅元数据，不含 content
   get(id: string): Promise<Note | null>;
   save(note: Note): Promise<void>;
-  del(id: string): Promise<void>;
+  search(query: string): Promise<NoteMeta[]>;
   getUsage?(): Promise<{ used: number; total: number }>;
   exportAll(): Promise<Note[]>;
 }

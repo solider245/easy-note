@@ -7,6 +7,8 @@ export const notes = sqliteTable('notes', {
     tags: text('tags').notNull().default('[]'), // JSON array of strings
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    isPinned: integer('is_pinned', { mode: 'boolean' }).notNull().default(false),
+    deletedAt: integer('deleted_at', { mode: 'timestamp_ms' }),
 });
 
 export const settings = sqliteTable('settings', {

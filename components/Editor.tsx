@@ -9,6 +9,7 @@ import { nord } from '@milkdown/theme-nord';
 import { listener, listenerCtx } from '@milkdown/plugin-listener';
 import { useCompletion } from 'ai/react';
 import { Sparkles, Wand2, Type } from 'lucide-react';
+import { toast } from 'sonner';
 import { replaceAll } from '@milkdown/utils';
 
 interface EditorProps {
@@ -18,8 +19,22 @@ interface EditorProps {
 
 const EditorImpl: React.FC<EditorProps> = ({ content, onChange }) => {
     const [editorInstance, setEditorInstance] = useState<Editor | null>(null);
+    const [lastCompletionLength, setLastCompletionLength] = useState(0);
+    const [streamInsertPos, setStreamInsertPos] = useState<number | null>(null);
+
     const { complete, completion, isLoading } = useCompletion({
         api: '/api/ai/complete',
+        onResponse: () => {
+            const view = editorInstance?.action((ctx) => ctx.get(editorViewCtx));
+            if (view) {
+                setStreamInsertPos(view.state.selection.to);
+            }
+        },
+        onFinish: () => {
+            setLastCompletionLength(0);
+            setStreamInsertPos(null);
+            toast.success('AI completion finished');
+        }
     });
 
     const editor = useEditor((root) => {
@@ -42,32 +57,49 @@ const EditorImpl: React.FC<EditorProps> = ({ content, onChange }) => {
         return e;
     }, [content]);
 
-    // Update editor with AI completion result
+    // Update editor with AI completion result (Streaming effect)
     useEffect(() => {
-        if (completion && editorInstance) {
-            // This is a simplified way to append completion
-            // Proper insertion would use prosemirror transaction
-            // But since it's a stream, we might just want to wait for the end or append incrementally
+        if (completion && editorInstance && isLoading && streamInsertPos !== null) {
+            const addedText = completion.slice(lastCompletionLength);
+            if (addedText) {
+                editorInstance.action((ctx) => {
+                    const view = ctx.get(editorViewCtx);
+                    const { state, dispatch } = view;
+                    const tr = state.tr.insertText(addedText, streamInsertPos);
+                    dispatch(tr);
+                    setStreamInsertPos(streamInsertPos + addedText.length);
+                });
+                setLastCompletionLength(completion.length);
+            }
         }
-    }, [completion, editorInstance]);
+    }, [completion, editorInstance, isLoading, lastCompletionLength, streamInsertPos]);
+
+    // Keyboard Shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+                e.preventDefault();
+                toast.success('Note saved (Autosave enabled)');
+            }
+            if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'A') {
+                e.preventDefault();
+                handleAIComplete();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [editorInstance]);
 
     const handleAIComplete = async () => {
+        if (isLoading) return;
         const view = editorInstance?.action((ctx) => ctx.get(editorViewCtx));
         if (!view) return;
 
         const { state } = view;
         const textBefore = state.doc.textBetween(Math.max(0, state.selection.from - 500), state.selection.from, '\n');
 
-        const result = await complete('', { body: { context: textBefore } });
-        if (result && editorInstance) {
-            // Append result to editor
-            editorInstance.action((ctx) => {
-                const view = ctx.get(editorViewCtx);
-                const { state, dispatch } = view;
-                const tr = state.tr.insertText(result, state.selection.to);
-                dispatch(tr);
-            });
-        }
+        setLastCompletionLength(0);
+        await complete('', { body: { context: textBefore } });
     };
 
     const handleAIAction = async (type: 'summarize' | 'improve') => {
@@ -103,7 +135,8 @@ const EditorImpl: React.FC<EditorProps> = ({ content, onChange }) => {
                 <button
                     onClick={handleAIComplete}
                     disabled={isLoading}
-                    className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-blue-600 dark:text-blue-400 title='Continue Writing'"
+                    className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-blue-600 dark:text-blue-400"
+                    title="Continue Writing (Cmd+Shift+A)"
                 >
                     <Sparkles className="w-4 h-4" />
                 </button>

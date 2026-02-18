@@ -7,6 +7,8 @@ export const notes = pgTable('notes', {
     tags: text('tags').notNull().default('[]'), // JSON array of strings
     createdAt: bigint('created_at', { mode: 'number' }).notNull(),
     updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+    isPinned: text('is_pinned').notNull().default('false'), // Postgres doesn't always handle boolean defaults in Drizzle easily with strings, or we can use boolean('is_pinned').
+    deletedAt: bigint('deleted_at', { mode: 'number' }),
 });
 
 export const settings = pgTable('settings', {

@@ -16,33 +16,36 @@ export class DbAdapter implements StorageAdapter {
     async list(): Promise<NoteMeta[]> {
         const db = await getDb();
         const { notes } = await getSchema();
-        const { eq, desc } = await import('drizzle-orm');
+        const { eq, desc, and, isNull } = await import('drizzle-orm');
 
         const rows = await (db as any).select({
             id: notes.id,
             title: notes.title,
             createdAt: notes.createdAt,
             updatedAt: notes.updatedAt,
-        }).from(notes).orderBy(desc(notes.updatedAt));
+            isPinned: notes.isPinned,
+            deletedAt: notes.deletedAt,
+        })
+            .from(notes)
+            .where(isNull(notes.deletedAt))
+            .orderBy(desc(notes.isPinned), desc(notes.updatedAt));
 
         if (rows.length === 0) {
             const welcome = getWelcomeNote();
-            return [{ id: welcome.id, title: welcome.title, createdAt: welcome.createdAt, updatedAt: welcome.updatedAt }];
+            return [{ ...welcome, isPinned: false, deletedAt: null }];
         }
 
-        return rows.map((r: any) => ({
+        return (rows as any[]).map((r) => ({
             id: r.id,
             title: r.title,
             createdAt: Number(r.createdAt),
             updatedAt: Number(r.updatedAt),
+            isPinned: Boolean(r.isPinned === 1 || r.isPinned === true || r.isPinned === 'true'),
+            deletedAt: r.deletedAt ? Number(r.deletedAt) : null,
         }));
     }
 
     async get(id: string): Promise<Note | null> {
-        if (id === WELCOME_NOTE_ID) {
-            // Check if it exists in DB first
-        }
-
         const db = await getDb();
         const { notes } = await getSchema();
         const { eq } = await import('drizzle-orm');
@@ -54,13 +57,15 @@ export class DbAdapter implements StorageAdapter {
             return null;
         }
 
-        const r = rows[0];
+        const r = rows[0] as any;
         return {
             id: r.id,
             title: r.title,
             content: r.content,
             createdAt: Number(r.createdAt),
             updatedAt: Number(r.updatedAt),
+            isPinned: Boolean(r.isPinned === 1 || r.isPinned === true || r.isPinned === 'true'),
+            deletedAt: r.deletedAt ? Number(r.deletedAt) : null,
         };
     }
 
@@ -76,8 +81,10 @@ export class DbAdapter implements StorageAdapter {
             title: note.title,
             content: note.content,
             tags: '[]',
-            createdAt: note.createdAt,
-            updatedAt: note.updatedAt,
+            createdAt: note.createdAt as any,
+            updatedAt: note.updatedAt as any,
+            isPinned: isSQLite ? (note.isPinned ? 1 : 0) : (note.isPinned ? 'true' : 'false'),
+            deletedAt: note.deletedAt as any,
         };
 
         if (isSQLite) {
@@ -88,27 +95,55 @@ export class DbAdapter implements StorageAdapter {
                     title: note.title,
                     content: note.content,
                     updatedAt: note.updatedAt,
-                },
-            });
-        } else {
-            // Postgres upsert
-            const { sql } = await import('drizzle-orm');
-            await (db as any).insert(notes).values(values).onConflictDoUpdate({
-                target: notes.id,
-                set: {
-                    title: note.title,
-                    content: note.content,
-                    updatedAt: note.updatedAt,
+                    isPinned: values.isPinned,
+                    deletedAt: values.deletedAt,
                 },
             });
         }
+    }
+
+    async search(query: string): Promise<NoteMeta[]> {
+        const db = await getDb();
+        const { notes } = await getSchema();
+        const { eq, desc, and, isNull, or, like } = await import('drizzle-orm');
+
+        const searchPattern = `%${query}%`;
+        const rows = await (db as any).select({
+            id: notes.id,
+            title: notes.title,
+            createdAt: notes.createdAt,
+            updatedAt: notes.updatedAt,
+            isPinned: notes.isPinned,
+            deletedAt: notes.deletedAt,
+        })
+            .from(notes)
+            .where(
+                and(
+                    isNull(notes.deletedAt),
+                    or(
+                        like(notes.title, searchPattern),
+                        like(notes.content, searchPattern)
+                    )
+                )
+            )
+            .orderBy(desc(notes.isPinned), desc(notes.updatedAt));
+
+        return (rows as any[]).map((r) => ({
+            id: r.id,
+            title: r.title,
+            createdAt: Number(r.createdAt),
+            updatedAt: Number(r.updatedAt),
+            isPinned: Boolean(r.isPinned === 1 || r.isPinned === true || r.isPinned === 'true'),
+            deletedAt: r.deletedAt ? Number(r.deletedAt) : null,
+        }));
     }
 
     async del(id: string): Promise<void> {
         const db = await getDb();
         const { notes } = await getSchema();
         const { eq } = await import('drizzle-orm');
-        await (db as any).delete(notes).where(eq(notes.id, id));
+        // Soft delete
+        await (db as any).update(notes).set({ deletedAt: Date.now() }).where(eq(notes.id, id));
     }
 
     async getUsage(): Promise<{ used: number; total: number }> {
@@ -122,12 +157,14 @@ export class DbAdapter implements StorageAdapter {
         const { desc } = await import('drizzle-orm');
 
         const rows = await (db as any).select().from(notes).orderBy(desc(notes.updatedAt));
-        return rows.map((r: any) => ({
+        return (rows as any[]).map((r) => ({
             id: r.id,
             title: r.title,
             content: r.content,
             createdAt: Number(r.createdAt),
             updatedAt: Number(r.updatedAt),
+            isPinned: Boolean(r.isPinned === 1 || r.isPinned === true || r.isPinned === 'true'),
+            deletedAt: r.deletedAt ? Number(r.deletedAt) : null,
         }));
     }
 }

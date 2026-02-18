@@ -27,15 +27,18 @@
     "date-fns": "^4.1.0",
     "drizzle-orm": "^0.45.1",
     "iron-session": "^8.0.4",
+    "lodash.debounce": "^4.0.8",
     "lucide-react": "^0.574.0",
     "nanoid": "^5.1.6",
     "next": "16.1.6",
     "postgres": "^3.4.8",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "sonner": "^2.0.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/lodash.debounce": "^4.0.9",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
