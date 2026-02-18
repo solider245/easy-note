@@ -1,0 +1,27 @@
+export interface NoteMeta {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Note extends NoteMeta {
+  content: string; // Markdown 原文
+}
+
+// 笔记文本存储抽象
+export interface StorageAdapter {
+  list(): Promise<NoteMeta[]>;          // 仅元数据，不含 content
+  get(id: string): Promise<Note | null>;
+  save(note: Note): Promise<void>;
+  del(id: string): Promise<void>;
+  getUsage?(): Promise<{ used: number; total: number }>;
+  exportAll(): Promise<Note[]>;
+}
+
+// 媒体文件存储抽象（独立于笔记存储，可单独升级）
+export interface MediaAdapter {
+  upload(file: Buffer, filename: string, mimeType: string): Promise<string>; // 返回公开访问 URL
+  del(url: string): Promise<void>;
+  getUsage?(): Promise<{ used: number; total: number }>;
+}

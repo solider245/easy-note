@@ -9,6 +9,19 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@milkdown/core": "^7.18.0",
+    "@milkdown/ctx": "^7.18.0",
+    "@milkdown/kit": "^7.18.0",
+    "@milkdown/plugin-listener": "^7.18.0",
+    "@milkdown/preset-commonmark": "^7.18.0",
+    "@milkdown/preset-gfm": "^7.18.0",
+    "@milkdown/react": "^7.18.0",
+    "@milkdown/theme-nord": "^7.18.0",
+    "@tailwindcss/typography": "^0.5.19",
+    "@vercel/blob": "^2.2.0",
+    "date-fns": "^4.1.0",
+    "iron-session": "^8.0.4",
+    "nanoid": "^5.1.6",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3"
