@@ -72,6 +72,23 @@ By default, the app uses Vercel Blob for images. You can switch to any S3-compat
    ```
 3. Redeploy. New image uploads will now go to your S3/R2 bucket.
 
+## Phase 2-C: AI Writing Assistant (Optional Upgrade)
+
+Supercharge your note-taking with a built-in AI assistantpowered by **Vercel AI SDK**.
+
+### Features
+- ✨ **Continue Writing**: Let AI finish your sentence.
+- 📝 **Summarize**: Get a concise summary of your selection.
+- 🏷️ **Suggest Title**: One-click AI title generation based on content.
+
+### Setup Steps
+1. Get an API key from [OpenAI](https://platform.openai.com/).
+2. Add environment variables in Vercel:
+   ```
+   OPENAI_API_KEY=sk-...
+   ```
+3. Redeploy. A new **Sparkle** icon will appear on text selection and next to the note title.
+
 ## 🚀 Roadmap / Future Plans
 
 - [ ] **AI Writing Assistant**: Integrate Vercel AI SDK for smart autocompletion, summaries, and title generation.
