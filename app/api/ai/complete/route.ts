@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
     const { prompt, context } = await req.json();
 
     const result = streamText({
-        model: openai('gpt-4o-mini'),
+        model: openai('gpt-4o-mini') as any,
         system: `You are a helpful writing assistant. 
     The user is writing a note in Markdown format. 
     Context from previous lines: ${context}

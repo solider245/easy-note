@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.29",
+    "@ai-sdk/react": "^3.0.93",
     "@aws-sdk/client-s3": "^3.992.0",
     "@aws-sdk/lib-storage": "^3.992.0",
     "@libsql/client": "^0.17.0",
@@ -23,7 +24,7 @@
     "@milkdown/theme-nord": "^7.18.0",
     "@tailwindcss/typography": "^0.5.19",
     "@vercel/blob": "^2.2.0",
-    "ai": "^6.0.90",
+    "ai": "^4.1.54",
     "date-fns": "^4.1.0",
     "drizzle-orm": "^0.45.1",
     "iron-session": "^8.0.4",

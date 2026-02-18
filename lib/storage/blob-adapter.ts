@@ -9,7 +9,7 @@ export class BlobAdapter implements StorageAdapter {
         const { blobs } = await list({ prefix: this.prefix });
         if (blobs.length === 0) {
             const welcome = getWelcomeNote();
-            return [{ id: welcome.id, title: welcome.title, createdAt: welcome.createdAt, updatedAt: welcome.updatedAt }];
+            return [{ ...welcome, isPinned: false, deletedAt: null }];
         }
 
         const notes: NoteMeta[] = [];
@@ -22,10 +22,34 @@ export class BlobAdapter implements StorageAdapter {
                 title: data.title,
                 createdAt: data.createdAt,
                 updatedAt: data.updatedAt,
+                isPinned: data.isPinned || false,
+                deletedAt: data.deletedAt || null,
             });
         }
 
-        return notes.sort((a, b) => b.updatedAt - a.updatedAt);
+        return notes
+            .filter(n => !n.deletedAt)
+            .sort((a, b) => {
+                if (a.isPinned && !b.isPinned) return -1;
+                if (!a.isPinned && b.isPinned) return 1;
+                return b.updatedAt - a.updatedAt;
+            });
+    }
+
+    async search(query: string): Promise<NoteMeta[]> {
+        const all = await this.list();
+        const lowerQuery = query.toLowerCase();
+        // Since list() already fetches the full content (inefficiently for blob), we can filter here.
+        // Actually list() here ONLY returns NoteMeta. 
+        // For BlobAdapter, we'd need to fetch actual notes to search body.
+        const results: NoteMeta[] = [];
+        for (const meta of all) {
+            const note = await this.get(meta.id);
+            if (note && (note.title.toLowerCase().includes(lowerQuery) || note.content.toLowerCase().includes(lowerQuery))) {
+                results.push(meta);
+            }
+        }
+        return results;
     }
 
     async get(id: string): Promise<Note | null> {

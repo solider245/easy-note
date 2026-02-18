@@ -40,5 +40,7 @@ Enjoy writing!
 `,
         createdAt: now,
         updatedAt: now,
+        isPinned: false,
+        deletedAt: null,
     };
 };

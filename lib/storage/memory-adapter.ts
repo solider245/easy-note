@@ -7,11 +7,28 @@ export class MemoryAdapter implements StorageAdapter {
     async list(): Promise<NoteMeta[]> {
         if (this.notes.size === 0) {
             const welcome = getWelcomeNote();
-            return [{ id: welcome.id, title: welcome.title, createdAt: welcome.createdAt, updatedAt: welcome.updatedAt }];
+            return [{ ...welcome, isPinned: false, deletedAt: null }];
         }
         return Array.from(this.notes.values())
+            .filter(n => !n.deletedAt)
             .map(({ content, ...meta }) => meta)
-            .sort((a, b) => b.updatedAt - a.updatedAt);
+            .sort((a, b) => {
+                if (a.isPinned && !b.isPinned) return -1;
+                if (!a.isPinned && b.isPinned) return 1;
+                return b.updatedAt - a.updatedAt;
+            });
+    }
+
+    async search(query: string): Promise<NoteMeta[]> {
+        const lowerQuery = query.toLowerCase();
+        return Array.from(this.notes.values())
+            .filter(n => !n.deletedAt && (n.title.toLowerCase().includes(lowerQuery) || n.content.toLowerCase().includes(lowerQuery)))
+            .map(({ content, ...meta }) => meta)
+            .sort((a, b) => {
+                if (a.isPinned && !b.isPinned) return -1;
+                if (!a.isPinned && b.isPinned) return 1;
+                return b.updatedAt - a.updatedAt;
+            });
     }
 
     async get(id: string): Promise<Note | null> {

@@ -9,14 +9,14 @@ export async function POST(req: NextRequest) {
 
     if (type === 'summarize') {
         const { text } = await generateText({
-            model: openai('gpt-4o-mini'),
+            model: openai('gpt-4o-mini') as any,
             system: 'You are a helpful writing assistant. Summarize the provided Markdown text concisely.',
             prompt: content,
         });
         return NextResponse.json({ result: text });
     } else if (type === 'suggest-title') {
         const { text } = await generateText({
-            model: openai('gpt-4o-mini'),
+            model: openai('gpt-4o-mini') as any,
             system: 'You are a helpful writing assistant. Suggest a short, catchy title for the provided Markdown content. Return ONLY the title.',
             prompt: content,
         });
