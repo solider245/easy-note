@@ -4,24 +4,67 @@ import { getWelcomeNote, WELCOME_NOTE_ID } from '../welcome-note';
 
 // We use dynamic imports for schemas to avoid loading both at startup
 async function getSchema() {
-    const { configService } = await import('../config/config-service');
-    const url = await configService.get('DATABASE_URL') || await configService.get('TURSO_DATABASE_URL') || '';
-    if (url.startsWith('libsql://') || url.startsWith('file:')) {
+    const dbUrl = process.env.DATABASE_URL || process.env.TURSO_DATABASE_URL || '';
+    if (dbUrl.startsWith('libsql://') || dbUrl.startsWith('file:') || !dbUrl.includes('://')) {
         return await import('../db/schema');
     } else {
         return await import('../db/schema.pg');
     }
 }
 
+function isSQLiteUrl(url: string): boolean {
+    return url.startsWith('libsql://') || url.startsWith('file:') || !url.includes('://');
+}
+
+/** Strip markdown syntax and return plain text preview */
+function getPreview(content: string, maxLen = 120): string {
+    return content
+        .replace(/!\[.*?\]\(.*?\)/g, '')
+        .replace(/\[.*?\]\(.*?\)/g, '$1')
+        .replace(/#{1,6}\s+/g, '')
+        .replace(/[*_`~>]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, maxLen);
+}
+
+function getWordCount(content: string): number {
+    const text = content.replace(/[#*_`~\[\]()>]/g, ' ').trim();
+    if (!text) return 0;
+    return text.split(/\s+/).filter(Boolean).length;
+}
+
+function parseTags(raw: string | null | undefined): string[] {
+    if (!raw) return [];
+    try { return JSON.parse(raw); } catch { return []; }
+}
+
+function rowToMeta(r: any, content?: string): NoteMeta {
+    const tags = parseTags(r.tags);
+    return {
+        id: r.id,
+        title: r.title,
+        createdAt: Number(r.createdAt),
+        updatedAt: Number(r.updatedAt),
+        isPinned: Boolean(r.isPinned === 1 || r.isPinned === true || r.isPinned === 'true'),
+        deletedAt: r.deletedAt ? Number(r.deletedAt) : null,
+        tags,
+        preview: content !== undefined ? getPreview(content) : (r.content ? getPreview(r.content) : undefined),
+        wordCount: content !== undefined ? getWordCount(content) : (r.content ? getWordCount(r.content) : undefined),
+    };
+}
+
 export class DbAdapter implements StorageAdapter {
     async list(): Promise<NoteMeta[]> {
         const db = await getDb();
         const { notes } = await getSchema();
-        const { eq, desc, and, isNull } = await import('drizzle-orm');
+        const { desc, isNull } = await import('drizzle-orm');
 
         const rows = await (db as any).select({
             id: notes.id,
             title: notes.title,
+            content: notes.content,
+            tags: notes.tags,
             createdAt: notes.createdAt,
             updatedAt: notes.updatedAt,
             isPinned: notes.isPinned,
@@ -33,17 +76,15 @@ export class DbAdapter implements StorageAdapter {
 
         if (rows.length === 0) {
             const welcome = getWelcomeNote();
-            return [{ ...welcome, isPinned: false, deletedAt: null }];
+            return [{
+                ...welcome,
+                preview: getPreview(welcome.content),
+                wordCount: getWordCount(welcome.content),
+                tags: [],
+            }];
         }
 
-        return (rows as any[]).map((r) => ({
-            id: r.id,
-            title: r.title,
-            createdAt: Number(r.createdAt),
-            updatedAt: Number(r.updatedAt),
-            isPinned: Boolean(r.isPinned === 1 || r.isPinned === true || r.isPinned === 'true'),
-            deletedAt: r.deletedAt ? Number(r.deletedAt) : null,
-        }));
+        return (rows as any[]).map(r => rowToMeta(r, r.content));
     }
 
     async get(id: string): Promise<Note | null> {
@@ -67,62 +108,53 @@ export class DbAdapter implements StorageAdapter {
             updatedAt: Number(r.updatedAt),
             isPinned: Boolean(r.isPinned === 1 || r.isPinned === true || r.isPinned === 'true'),
             deletedAt: r.deletedAt ? Number(r.deletedAt) : null,
+            tags: parseTags(r.tags),
         };
     }
 
     async save(note: Note): Promise<void> {
         const db = await getDb();
         const { notes } = await getSchema();
-        const { configService } = await import('../config/config-service');
-        const url = await configService.get('DATABASE_URL') || await configService.get('TURSO_DATABASE_URL') || '';
-        const isSQLite = url.startsWith('libsql://') || url.startsWith('file:');
+        const dbUrl = process.env.DATABASE_URL || process.env.TURSO_DATABASE_URL || '';
+        const sqlite = isSQLiteUrl(dbUrl);
+
+        const tagsJson = JSON.stringify(note.tags || []);
 
         const values = {
             id: note.id,
             title: note.title,
             content: note.content,
-            tags: '[]',
+            tags: tagsJson,
             createdAt: note.createdAt as any,
             updatedAt: note.updatedAt as any,
-            isPinned: isSQLite ? (note.isPinned ? 1 : 0) : (note.isPinned ? 'true' : 'false'),
+            isPinned: sqlite ? (note.isPinned ? 1 : 0) : note.isPinned,
             deletedAt: note.deletedAt as any,
         };
 
-        if (isSQLite) {
-            await (db as any).insert(notes).values(values).onConflictDoUpdate({
-                target: notes.id,
-                set: {
-                    title: note.title,
-                    content: note.content,
-                    updatedAt: note.updatedAt,
-                    isPinned: values.isPinned,
-                    deletedAt: values.deletedAt,
-                },
-            });
-        } else {
-            // PostgreSQL upsert
-            await (db as any).insert(notes).values(values).onConflictDoUpdate({
-                target: notes.id,
-                set: {
-                    title: note.title,
-                    content: note.content,
-                    updatedAt: note.updatedAt,
-                    isPinned: values.isPinned,
-                    deletedAt: values.deletedAt,
-                },
-            });
-        }
+        await (db as any).insert(notes).values(values).onConflictDoUpdate({
+            target: notes.id,
+            set: {
+                title: note.title,
+                content: note.content,
+                tags: tagsJson,
+                updatedAt: note.updatedAt,
+                isPinned: values.isPinned,
+                deletedAt: values.deletedAt,
+            },
+        });
     }
 
     async search(query: string): Promise<NoteMeta[]> {
         const db = await getDb();
         const { notes } = await getSchema();
-        const { eq, desc, and, isNull, or, like } = await import('drizzle-orm');
+        const { desc, isNull, and, or, like } = await import('drizzle-orm');
 
         const searchPattern = `%${query}%`;
         const rows = await (db as any).select({
             id: notes.id,
             title: notes.title,
+            content: notes.content,
+            tags: notes.tags,
             createdAt: notes.createdAt,
             updatedAt: notes.updatedAt,
             isPinned: notes.isPinned,
@@ -134,20 +166,14 @@ export class DbAdapter implements StorageAdapter {
                     isNull(notes.deletedAt),
                     or(
                         like(notes.title, searchPattern),
-                        like(notes.content, searchPattern)
+                        like(notes.content, searchPattern),
+                        like(notes.tags, searchPattern)
                     )
                 )
             )
             .orderBy(desc(notes.isPinned), desc(notes.updatedAt));
 
-        return (rows as any[]).map((r) => ({
-            id: r.id,
-            title: r.title,
-            createdAt: Number(r.createdAt),
-            updatedAt: Number(r.updatedAt),
-            isPinned: Boolean(r.isPinned === 1 || r.isPinned === true || r.isPinned === 'true'),
-            deletedAt: r.deletedAt ? Number(r.deletedAt) : null,
-        }));
+        return (rows as any[]).map(r => rowToMeta(r, r.content));
     }
 
     async del(id: string, purge?: boolean): Promise<void> {
@@ -156,16 +182,13 @@ export class DbAdapter implements StorageAdapter {
         const { eq } = await import('drizzle-orm');
 
         if (purge) {
-            // Hard delete
             await (db as any).delete(notes).where(eq(notes.id, id));
         } else {
-            // Soft delete
             await (db as any).update(notes).set({ deletedAt: Date.now() }).where(eq(notes.id, id));
         }
     }
 
     async getUsage(): Promise<{ used: number; total: number }> {
-        // DB doesn't have a meaningful "usage" in MB for notes
         return { used: 0, total: Infinity };
     }
 
@@ -183,6 +206,7 @@ export class DbAdapter implements StorageAdapter {
             updatedAt: Number(r.updatedAt),
             isPinned: Boolean(r.isPinned === 1 || r.isPinned === true || r.isPinned === 'true'),
             deletedAt: r.deletedAt ? Number(r.deletedAt) : null,
+            tags: parseTags(r.tags),
         }));
     }
 }

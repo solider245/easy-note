@@ -23,7 +23,7 @@ export async function PUT(
     try {
         const { id } = await params;
         const storage = await getStorage();
-        const { title, content, isPinned } = await request.json();
+        const { title, content, isPinned, tags } = await request.json();
 
         const existing = await storage.get(id);
         if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -33,6 +33,7 @@ export async function PUT(
             title: title ?? existing.title,
             content: content ?? existing.content,
             isPinned: isPinned !== undefined ? isPinned : existing.isPinned,
+            tags: tags !== undefined ? tags : (existing.tags || []),
             updatedAt: Date.now(),
         };
 

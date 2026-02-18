@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import NoteList from '@/components/NoteList';
 import MilkdownEditor from '@/components/Editor';
 import { LoadingSkeleton } from '@/components/Skeleton';
@@ -10,7 +10,7 @@ import { Note, NoteMeta } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import debounce from 'lodash.debounce';
 import { toast } from 'sonner';
-import { Pin, Trash2, Settings, Download, LogOut, Menu } from 'lucide-react';
+import { Pin, Trash2, Settings, Download, LogOut, Menu, Tag, X } from 'lucide-react';
 
 export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: boolean }) {
   const [notes, setNotes] = useState<NoteMeta[]>([]);
@@ -19,12 +19,16 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
   const [usage, setUsage] = useState({ used: 0, total: 250 * 1024 * 1024 });
   const [isSaving, setIsSaving] = useState(false);
   const [config, setConfig] = useState<any>(null);
+  const [tagInput, setTagInput] = useState('');
+  const [showTagInput, setShowTagInput] = useState(false);
+  const tagInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   // Load notes list
-  const fetchNotes = useCallback(async () => {
+  const fetchNotes = useCallback(async (query?: string) => {
     try {
-      const res = await fetch('/api/notes');
+      const url = query ? `/api/notes?q=${encodeURIComponent(query)}` : '/api/notes';
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         setNotes(data);
@@ -41,7 +45,6 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
         const configRes = await fetch('/api/status/config');
         const configData = await configRes.json();
         setConfig(configData);
-        // Fetch real storage usage
         const usageRes = await fetch('/api/status');
         if (usageRes.ok) {
           const usageData = await usageRes.json();
@@ -56,6 +59,39 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
     init();
   }, [fetchNotes]);
 
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      const isEditing = tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable;
+
+      // Cmd+N: new note (not when typing)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n' && !isEditing) {
+        e.preventDefault();
+        handleCreateNote();
+      }
+      // Escape: deselect note on mobile / close tag input
+      if (e.key === 'Escape') {
+        if (showTagInput) {
+          setShowTagInput(false);
+          setTagInput('');
+        }
+      }
+      // Cmd+Delete: delete selected note
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Backspace' && selectedNote && !isEditing) {
+        e.preventDefault();
+        handleDeleteNote(selectedNote.id);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [selectedNote, showTagInput]);
+
+  // Focus tag input when shown
+  useEffect(() => {
+    if (showTagInput) tagInputRef.current?.focus();
+  }, [showTagInput]);
+
   // Debounced title update
   const debouncedTitleUpdate = useMemo(
     () => debounce(async (id: string, title: string) => {
@@ -68,7 +104,7 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
     []
   );
 
-  // Debounced update functions
+  // Debounced content update
   const debouncedUpdate = useMemo(
     () => debounce(async (id: string, updates: Partial<Note>, currentTitle?: string) => {
       setIsSaving(true);
@@ -103,7 +139,7 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
             }
           }
         }
-      } catch (e) {
+      } catch {
         toast.error('Failed to auto-save note');
       } finally {
         setIsSaving(false);
@@ -118,6 +154,7 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
       if (res.ok) {
         const data = await res.json();
         setSelectedNote(data);
+        setShowTagInput(false);
       }
     } catch {
       toast.error('Failed to load note');
@@ -133,7 +170,7 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
       });
       if (res.ok) {
         const newNote = await res.json();
-        setNotes([newNote, ...notes]);
+        setNotes(prev => [newNote, ...prev]);
         setSelectedNote(newNote);
         toast.success('Note created');
       }
@@ -154,7 +191,7 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
       const res = await fetch(`/api/notes/${id}`, { method: 'DELETE' });
       if (res.ok) {
         if (selectedNote?.id === id) setSelectedNote(null);
-        setNotes(notes.filter(n => n.id !== id));
+        setNotes(prev => prev.filter(n => n.id !== id));
         toast.success('Note moved to Trash', {
           action: { label: 'View Trash', onClick: () => router.push('/trash') },
         });
@@ -169,7 +206,6 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
     const newPinned = !selectedNote.isPinned;
     setSelectedNote({ ...selectedNote, isPinned: newPinned });
     setNotes(prev => prev.map(n => n.id === selectedNote.id ? { ...n, isPinned: newPinned } : n));
-
     try {
       await fetch(`/api/notes/${selectedNote.id}`, {
         method: 'PUT',
@@ -179,6 +215,46 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
       toast.success(newPinned ? 'Note pinned' : 'Note unpinned');
     } catch {
       toast.error('Failed to update pin status');
+    }
+  };
+
+  const handleAddTag = async (tag: string) => {
+    if (!selectedNote || !tag.trim()) return;
+    const trimmed = tag.trim().toLowerCase().replace(/\s+/g, '-');
+    const currentTags = selectedNote.tags || [];
+    if (currentTags.includes(trimmed)) {
+      toast.info('Tag already exists');
+      return;
+    }
+    const newTags = [...currentTags, trimmed];
+    setSelectedNote({ ...selectedNote, tags: newTags });
+    setNotes(prev => prev.map(n => n.id === selectedNote.id ? { ...n, tags: newTags } : n));
+    setTagInput('');
+    setShowTagInput(false);
+    try {
+      await fetch(`/api/notes/${selectedNote.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags: newTags }),
+      });
+    } catch {
+      toast.error('Failed to save tag');
+    }
+  };
+
+  const handleRemoveTag = async (tag: string) => {
+    if (!selectedNote) return;
+    const newTags = (selectedNote.tags || []).filter(t => t !== tag);
+    setSelectedNote({ ...selectedNote, tags: newTags });
+    setNotes(prev => prev.map(n => n.id === selectedNote.id ? { ...n, tags: newTags } : n));
+    try {
+      await fetch(`/api/notes/${selectedNote.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags: newTags }),
+      });
+    } catch {
+      toast.error('Failed to remove tag');
     }
   };
 
@@ -232,47 +308,41 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        <div className={`w-full md:w-80 flex-shrink-0 flex flex-col border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 ${selectedNote ? 'hidden md:flex' : 'flex'}`}>
+        <div className={`w-full md:w-72 flex-shrink-0 flex flex-col border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 ${selectedNote ? 'hidden md:flex' : 'flex'}`}>
           <div className="flex-1 overflow-hidden">
             <NoteList
               notes={notes}
               selectedId={selectedNote?.id || null}
               onSelect={handleSelectNote}
               onNew={handleCreateNote}
-              onSearch={async (query) => {
-                const res = await fetch(`/api/notes${query ? `?q=${encodeURIComponent(query)}` : ''}`);
-                if (res.ok) {
-                  const filtered = await res.json();
-                  setNotes(filtered);
-                }
-              }}
+              onSearch={fetchNotes}
             />
           </div>
-          <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
+          <div className="p-3 border-t border-gray-200 dark:border-gray-700 space-y-1">
             <button
               onClick={() => router.push('/trash')}
-              className="w-full py-2 px-4 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors flex items-center justify-center gap-2"
+              className="w-full py-2 px-3 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors flex items-center justify-center gap-2"
             >
               <Trash2 className="h-4 w-4" />
               Trash
             </button>
             <button
               onClick={() => router.push('/settings')}
-              className="w-full py-2 px-4 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors flex items-center justify-center gap-2"
+              className="w-full py-2 px-3 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors flex items-center justify-center gap-2"
             >
               <Settings className="h-4 w-4" />
               Settings
             </button>
             <button
               onClick={handleExport}
-              className="w-full py-2 px-4 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors flex items-center justify-center gap-2"
+              className="w-full py-2 px-3 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors flex items-center justify-center gap-2"
             >
               <Download className="h-4 w-4" />
               Export JSON
             </button>
             <button
               onClick={handleLogout}
-              className="w-full py-2 px-4 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors flex items-center justify-center gap-2"
+              className="w-full py-2 px-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors flex items-center justify-center gap-2"
             >
               <LogOut className="h-4 w-4" />
               Sign Out
@@ -284,7 +354,8 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
         <div className={`flex-1 flex flex-col overflow-hidden ${!selectedNote ? 'hidden md:flex' : 'flex'}`}>
           {selectedNote ? (
             <div className="flex flex-col h-full">
-              <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-4">
+              {/* Toolbar */}
+              <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   <button
                     onClick={() => setSelectedNote(null)}
@@ -298,7 +369,7 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
                     onChange={(e) => {
                       const newTitle = e.target.value;
                       setSelectedNote({ ...selectedNote, title: newTitle });
-                      setNotes(notes.map(n => n.id === selectedNote.id ? { ...n, title: newTitle } : n));
+                      setNotes(prev => prev.map(n => n.id === selectedNote.id ? { ...n, title: newTitle } : n));
                       debouncedTitleUpdate(selectedNote.id, newTitle);
                     }}
                   />
@@ -310,6 +381,15 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
                       <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Saving</span>
                     </div>
                   )}
+                  {/* Tag button */}
+                  <button
+                    onClick={() => setShowTagInput(v => !v)}
+                    className={`p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${showTagInput ? 'text-blue-500' : 'text-gray-400'}`}
+                    title="Add Tag"
+                  >
+                    <Tag className="h-4 w-4" />
+                  </button>
+                  {/* Pin button */}
                   <button
                     onClick={handleTogglePin}
                     className={`p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${selectedNote.isPinned ? 'text-blue-500' : 'text-gray-400'}`}
@@ -317,6 +397,7 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
                   >
                     <Pin className="h-5 w-5" />
                   </button>
+                  {/* AI title button */}
                   <button
                     onClick={async () => {
                       const res = await fetch('/api/ai/process', {
@@ -332,7 +413,8 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ title: newTitle }),
                         });
-                        setNotes(notes.map(n => n.id === selectedNote.id ? { ...n, title: newTitle } : n));
+                        setNotes(prev => prev.map(n => n.id === selectedNote.id ? { ...n, title: newTitle } : n));
+                        toast.success('Title updated by AI');
                       }
                     }}
                     className="text-gray-400 hover:text-blue-500 transition-colors p-2"
@@ -342,10 +424,11 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                   </button>
+                  {/* Delete button */}
                   <button
                     onClick={() => handleDeleteNote(selectedNote.id)}
                     className="text-gray-400 hover:text-red-500 transition-colors p-2"
-                    title="Delete Note"
+                    title="Delete Note (⌘⌫)"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
@@ -353,6 +436,47 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
                   </button>
                 </div>
               </div>
+
+              {/* Tags bar */}
+              {((selectedNote.tags && selectedNote.tags.length > 0) || showTagInput) && (
+                <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2 flex-wrap bg-gray-50/50 dark:bg-gray-800/30">
+                  {(selectedNote.tags || []).map(tag => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium"
+                    >
+                      #{tag}
+                      <button
+                        onClick={() => handleRemoveTag(tag)}
+                        className="hover:text-red-500 transition-colors ml-0.5"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                  {showTagInput && (
+                    <form
+                      onSubmit={(e) => { e.preventDefault(); handleAddTag(tagInput); }}
+                      className="flex items-center gap-1"
+                    >
+                      <input
+                        ref={tagInputRef}
+                        type="text"
+                        value={tagInput}
+                        onChange={(e) => setTagInput(e.target.value)}
+                        placeholder="tag name…"
+                        className="text-xs border border-blue-300 dark:border-blue-700 rounded-full px-2 py-0.5 outline-none focus:ring-1 focus:ring-blue-400 bg-white dark:bg-gray-800 w-24"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') { setShowTagInput(false); setTagInput(''); }
+                        }}
+                      />
+                      <button type="submit" className="text-xs text-blue-600 hover:text-blue-800 font-medium">Add</button>
+                    </form>
+                  )}
+                </div>
+              )}
+
+              {/* Editor */}
               <div className="flex-1 overflow-auto p-8 prose dark:prose-invert max-w-none">
                 <MilkdownEditor
                   content={selectedNote.content}
@@ -361,8 +485,16 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
               </div>
             </div>
           ) : (
-            <div className="flex h-full items-center justify-center text-gray-400">
-              Select or create a note to start writing
+            <div className="flex h-full items-center justify-center flex-col gap-3 text-gray-400">
+              <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                <svg className="w-8 h-8 text-gray-300 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Select a note to start writing</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Press <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-[10px] font-mono">⌘N</kbd> to create a new note</p>
+              </div>
             </div>
           )}
         </div>

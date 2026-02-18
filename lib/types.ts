@@ -5,6 +5,9 @@ export interface NoteMeta {
   updatedAt: number;
   isPinned: boolean;
   deletedAt: number | null;
+  preview?: string;      // First ~120 chars of content (plain text)
+  wordCount?: number;    // Approximate word count
+  tags?: string[];       // Tag list
 }
 
 export interface Note extends NoteMeta {
