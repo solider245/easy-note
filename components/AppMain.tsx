@@ -10,15 +10,15 @@ import { Note, NoteMeta } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import debounce from 'lodash.debounce';
 import { toast } from 'sonner';
+import { Pin } from 'lucide-react';
 
 export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: boolean }) {
   const [notes, setNotes] = useState<NoteMeta[]>([]);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [loading, setLoading] = useState(true);
   const [usage] = useState({ used: 0, total: 250 * 1024 * 1024 });
-  const [storageStatus, setStorageStatus] = useState<'checking' | 'connected' | 'error'>('checking');
-  const [errorMessage, setErrorMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [config, setConfig] = useState<any>(null);
   const router = useRouter();
 
   // Load notes list
@@ -37,18 +37,12 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
   useEffect(() => {
     const init = async () => {
       try {
-        const statusRes = await fetch('/api/status');
-        const statusData = await statusRes.json();
-        if (statusData.status === 'connected') {
-          setStorageStatus('connected');
-          await fetchNotes();
-        } else {
-          setStorageStatus('error');
-          setErrorMessage(statusData.hint || statusData.message);
-        }
-      } catch {
-        setStorageStatus('error');
-        setErrorMessage('Failed to connect to the backend.');
+        await fetchNotes();
+        const configRes = await fetch('/api/status/config');
+        const configData = await configRes.json();
+        setConfig(configData);
+      } catch (e) {
+        console.error('Initialization failed', e);
       } finally {
         setLoading(false);
       }
@@ -68,10 +62,8 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
         });
         if (res.ok) {
           const updated = await res.json();
-          // Update the list entry as well
           setNotes(prev => prev.map(n => n.id === updated.id ? { ...n, ...updates, updatedAt: updated.updatedAt } : n));
 
-          // Smart Titling: If it's a new note and has enough content, suggest a title
           if (currentTitle === 'New Note' && updates.content && updates.content.length > 50) {
             const aiRes = await fetch('/api/ai/process', {
               method: 'POST',
@@ -81,7 +73,6 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
             if (aiRes.ok) {
               const { result: suggestedTitle } = await aiRes.json();
               if (suggestedTitle && suggestedTitle !== 'New Note') {
-                // Update title automatically
                 await fetch(`/api/notes/${id}`, {
                   method: 'PUT',
                   headers: { 'Content-Type': 'application/json' },
@@ -135,11 +126,7 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
 
   const handleUpdateNote = (content: string) => {
     if (!selectedNote) return;
-
-    // Immediate UI update
     setSelectedNote({ ...selectedNote, content });
-
-    // Debounced network update
     debouncedUpdate(selectedNote.id, { content }, selectedNote.title);
   };
 
@@ -157,6 +144,24 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
     }
   };
 
+  const handleTogglePin = async () => {
+    if (!selectedNote) return;
+    const newPinned = !selectedNote.isPinned;
+    setSelectedNote({ ...selectedNote, isPinned: newPinned });
+    setNotes(prev => prev.map(n => n.id === selectedNote.id ? { ...n, isPinned: newPinned } : n));
+
+    try {
+      await fetch(`/api/notes/${selectedNote.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPinned: newPinned }),
+      });
+      toast.success(newPinned ? 'Note pinned' : 'Note unpinned');
+    } catch {
+      toast.error('Failed to update pin status');
+    }
+  };
+
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/login');
@@ -166,17 +171,15 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
     window.open('/api/export');
   };
 
-  if (loading) {
-    return <LoadingSkeleton />;
-  }
-
-  const isDemoMode = storageStatus === 'error';
+  if (loading) return <LoadingSkeleton />;
 
   return (
     <div className="flex h-screen flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+      {/* Banners */}
       {isUsingDefaultPass && <SecurityWarning />}
-      {isDemoMode && (
-        <div className="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-4 py-2 flex items-center justify-center gap-2">
+
+      {config?.activeStorage === 'Local Memory (Demo)' && (
+        <div className="bg-amber-100 dark:bg-amber-900/40 border-b border-amber-200 dark:border-amber-800 px-4 py-2 flex items-center justify-between animate-in slide-in-from-top duration-500">
           <span className="text-amber-800 dark:text-amber-300 text-xs font-medium">
             ⚠️ <strong>Guest Mode:</strong> Changes are temporary. Connect a database or Vercel Blob for persistent storage.
           </span>
@@ -188,6 +191,23 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
           </button>
         </div>
       )}
+
+      {config?.activeStorage === 'Vercel Blob' && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800 px-4 py-1.5 flex items-center justify-center">
+          <span className="text-blue-700 dark:text-blue-300 text-[10px] font-semibold uppercase tracking-widest">
+            ☁️ Cloud Storage Active (Vercel Blob)
+          </span>
+        </div>
+      )}
+
+      {config?.activeStorage === 'Database' && (
+        <div className="bg-green-50 dark:bg-green-900/20 border-b border-green-100 dark:border-green-800 px-4 py-1.5 flex items-center justify-center">
+          <span className="text-green-700 dark:text-green-400 text-[10px] font-semibold uppercase tracking-widest leading-none">
+            ⚡ Ultra-Fast Database Active ({config.database.type})
+          </span>
+        </div>
+      )}
+
       <UsageBanner used={usage.used} total={usage.total} />
 
       <div className="flex flex-1 overflow-hidden">
@@ -248,7 +268,6 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
                   onChange={async (e) => {
                     const newTitle = e.target.value;
                     setSelectedNote({ ...selectedNote, title: newTitle });
-                    // Quick update
                     await fetch(`/api/notes/${selectedNote.id}`, {
                       method: 'PUT',
                       headers: { 'Content-Type': 'application/json' },
@@ -265,6 +284,13 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
                     </div>
                   )}
                   <button
+                    onClick={handleTogglePin}
+                    className={`p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${selectedNote.isPinned ? 'text-blue-500' : 'text-gray-400'}`}
+                    title={selectedNote.isPinned ? 'Unpin' : 'Pin to Top'}
+                  >
+                    <Pin className="h-5 w-5" />
+                  </button>
+                  <button
                     onClick={async () => {
                       const res = await fetch('/api/ai/process', {
                         method: 'POST',
@@ -272,8 +298,7 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
                         body: JSON.stringify({ content: selectedNote.content, type: 'suggest-title' }),
                       });
                       if (res.ok) {
-                        const { result } = await res.json();
-                        const newTitle = result;
+                        const { result: newTitle } = await res.json();
                         setSelectedNote({ ...selectedNote, title: newTitle });
                         await fetch(`/api/notes/${selectedNote.id}`, {
                           method: 'PUT',

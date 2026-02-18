@@ -10,7 +10,11 @@ let _initialized = false;
 export async function getDb(): Promise<AnyDrizzle> {
     if (_db && _initialized) return _db;
 
-    const url = process.env.DATABASE_URL!;
+    const url = process.env.DATABASE_URL || process.env.TURSO_DATABASE_URL;
+    if (!url) {
+        // Fallback or error handled by caller (getStorage)
+        throw new Error('No database URL found');
+    }
     const isSQLite = url.startsWith('libsql://') || url.startsWith('file:');
 
     if (!_db) {
@@ -19,7 +23,7 @@ export async function getDb(): Promise<AnyDrizzle> {
             const { drizzle } = await import('drizzle-orm/libsql');
             const client = createClient({
                 url,
-                authToken: process.env.DATABASE_AUTH_TOKEN,
+                authToken: process.env.DATABASE_AUTH_TOKEN || process.env.TURSO_AUTH_TOKEN,
             });
             _db = drizzle(client);
         } else {
