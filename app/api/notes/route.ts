@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getStorage } from '@/lib/storage';
 import { nanoid } from 'nanoid';
 
@@ -12,7 +12,7 @@ export async function GET() {
     }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
     try {
         const storage = await getStorage();
         const { title, content } = await request.json();
