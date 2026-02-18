@@ -55,6 +55,23 @@ Connect a real database to unlock **persistent settings** and **in-app password 
    ```
 3. **Redeploy**. The app will automatically create the required tables on the first visit. You can then change your password from the **Settings** page inside the app.
 
+## Phase 2-B: S3 Media Storage (Optional Upgrade)
+
+By default, the app uses Vercel Blob for images. You can switch to any S3-compatible storage (like **Cloudflare R2** or **AWS S3**) for better control and lower costs.
+
+### Setup Steps
+1. Create a bucket in Cloudflare R2 or AWS S3.
+2. Add environment variables in Vercel:
+   ```
+   S3_ENDPOINT=https://<id>.r2.cloudflarestorage.com
+   S3_PUBLIC_URL=https://pub-your-id.r2.dev  # or your custom domain
+   AWS_S3_BUCKET=easy-note-media
+   AWS_ACCESS_KEY_ID=...
+   AWS_SECRET_ACCESS_KEY=...
+   AWS_REGION=auto  # use 'auto' for R2
+   ```
+3. Redeploy. New image uploads will now go to your S3/R2 bucket.
+
 ## 🚀 Roadmap / Future Plans
 
 - [ ] **AI Writing Assistant**: Integrate Vercel AI SDK for smart autocompletion, summaries, and title generation.
