@@ -1,27 +1,28 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
     Shield, Database, Cloud, Sparkles, ChevronLeft, Save, Loader2,
     CheckCircle2, AlertCircle, Copy, Link, Wand2, Terminal, Info,
-    HardDrive, Download, Upload
+    HardDrive, Download, Upload, Globe, Server, Unlink
 } from 'lucide-react';
+
+// Lazy load DatabaseConfigForm to reduce initial bundle size
+const DatabaseConfigForm = lazy(() => import('@/components/DatabaseConfigForm'));
 
 export default function SettingsPage() {
     const router = useRouter();
 
     // -- State: Config Status --
     const [configStatus, setConfigStatus] = useState<any>(null);
-    const isDemo = configStatus?.activeStorage === 'Local Memory (Demo)';
+    const [dbStatus, setDbStatus] = useState<{ storageType: string; provider: string | null; isConfigured: boolean; isDemoMode: boolean } | null>(null);
+    const isDemo = configStatus?.activeStorage === 'Local Memory (Demo)' || dbStatus?.isDemoMode;
 
     // -- State: Database Setup Wizard --
-    const [dbUrl, setDbUrl] = useState('');
-    const [dbToken, setDbToken] = useState('');
-    const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
-    const [testError, setTestError] = useState('');
-    const [setupStep, setSetupStep] = useState<'input' | 'guide'>('input');
+    const [showDbConfig, setShowDbConfig] = useState(false);
+    const [isDisconnecting, setIsDisconnecting] = useState(false);
 
     // -- State: AI & S3 Config --
     const [aiKey, setAiKey] = useState('');
@@ -74,55 +75,53 @@ export default function SettingsPage() {
     useEffect(() => {
         fetchConfig();
         fetchStats();
+        fetchDbStatus();
     }, []);
 
-    // -- Database Wizard Actions --
-    const handleTestConnection = async () => {
-        setTestStatus('testing');
-        setTestError('');
+    // -- Database Actions --
+    const fetchDbStatus = async () => {
         try {
-            const res = await fetch('/api/status/config/test', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: dbUrl, authToken: dbToken }),
-            });
+            const res = await fetch('/api/database/status');
             const data = await res.json();
-            if (data.success) {
-                setTestStatus('success');
-                setSetupStep('guide');
-                toast.success('Connection successful!');
-            } else {
-                setTestStatus('error');
-                setTestError(data.error || 'Connection failed');
-            }
+            setDbStatus(data);
         } catch (e) {
-            setTestStatus('error');
-            setTestError('Network error during connection test');
+            console.error('Failed to fetch database status:', e);
         }
     };
 
-    const handleVpsSave = async () => {
-        setIsSavingConfig('DATABASE_URL');
+    const handleDisconnect = async () => {
+        if (!confirm('Are you sure you want to disconnect from the database? This will switch to demo mode and any unsaved data may be lost.')) {
+            return;
+        }
+        
+        setIsDisconnecting(true);
         try {
-            await fetch('/api/status/config', {
+            const res = await fetch('/api/database/disconnect', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key: 'DATABASE_URL', value: dbUrl }),
+                body: JSON.stringify({ confirm: true }),
             });
-            if (dbToken) {
-                await fetch('/api/status/config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key: 'TURSO_AUTH_TOKEN', value: dbToken }),
-                });
+            const data = await res.json();
+            
+            if (data.success) {
+                toast.success('Disconnected from database');
+                fetchDbStatus();
+                fetchConfig();
+            } else {
+                toast.error(data.message || 'Failed to disconnect');
             }
-            toast.success('Configuration saved! Please restart your container/service.');
-            setTimeout(() => window.location.reload(), 2000);
         } catch (e) {
-            toast.error('Failed to save configuration');
+            toast.error('Failed to disconnect from database');
         } finally {
-            setIsSavingConfig(null);
+            setIsDisconnecting(false);
         }
+    };
+
+    const handleDbConnect = () => {
+        setShowDbConfig(false);
+        fetchDbStatus();
+        fetchConfig();
+        toast.success('Database configuration updated');
     };
 
     // -- Config Actions --
@@ -283,8 +282,8 @@ export default function SettingsPage() {
                     </div>
                 </div>
 
-                {/* Database Wizard Card (Only in Demo Mode) */}
-                {isDemo && (
+                {/* Database Setup Wizard (Only in Demo Mode) */}
+                {isDemo && !showDbConfig && (
                     <div className="bg-gradient-to-br from-indigo-600 to-blue-700 rounded-3xl shadow-xl overflow-hidden text-white">
                         <div className="p-8 md:p-10 flex flex-col md:flex-row gap-8 items-center">
                             <div className="flex-1 space-y-4">
@@ -294,99 +293,63 @@ export default function SettingsPage() {
                                 </div>
                                 <h2 className="text-3xl font-bold">Activate Permanent Storage</h2>
                                 <p className="text-blue-100 max-w-lg">
-                                    You are currently in Demo mode. Connect a Database to unlock permanent storage, custom passwords, and AI persistence.
+                                    You are currently in Demo mode. Connect a Database (Turso or Supabase) to unlock permanent storage, custom passwords, and AI persistence.
                                 </p>
                             </div>
 
-                            <div className="w-full md:w-96 bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl text-gray-900 dark:text-white">
-                                {setupStep === 'input' ? (
-                                    <div className="space-y-4">
-                                        <div className="space-y-1.5">
-                                            <label className="text-xs font-bold text-gray-400 uppercase">Database URL</label>
-                                            <input
-                                                value={dbUrl}
-                                                onChange={(e) => setDbUrl(e.target.value)}
-                                                placeholder="libsql://... or file:..."
-                                                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
-                                            />
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <label className="text-xs font-bold text-gray-400 uppercase">Auth Token (Optional)</label>
-                                            <input
-                                                type="password"
-                                                value={dbToken}
-                                                onChange={(e) => setDbToken(e.target.value)}
-                                                placeholder="Turso secret token"
-                                                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
-                                            />
-                                        </div>
-
-                                        {testStatus === 'error' && (
-                                            <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs rounded-lg">
-                                                <AlertCircle className="h-4 w-4 shrink-0" />
-                                                <span>{testError}</span>
-                                            </div>
-                                        )}
-
-                                        <button
-                                            onClick={handleTestConnection}
-                                            disabled={testStatus === 'testing' || !dbUrl}
-                                            className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-2"
-                                        >
-                                            {testStatus === 'testing' ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Connect & Verify'}
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-6">
-                                        <div className="flex items-center gap-3 text-green-600 font-bold">
-                                            <div className="p-2 bg-green-100 rounded-full"><CheckCircle2 className="h-6 w-6" /></div>
-                                            Test Successful!
-                                        </div>
-
-                                        <div className="space-y-4">
-                                            <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
-                                                <p className="text-xs text-gray-500 mb-3">Deploying on <strong>VPS / Docker</strong>?</p>
-                                                <button
-                                                    onClick={handleVpsSave}
-                                                    className="w-full py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold rounded-lg text-sm transition-all"
-                                                >
-                                                    Save Configuration Local
-                                                </button>
-                                            </div>
-
-                                            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-dashed border-blue-200 dark:border-blue-800">
-                                                <p className="text-xs text-blue-600 dark:text-blue-400 mb-3">Deploying on <strong>Vercel</strong>?</p>
-                                                <div className="flex gap-2">
-                                                    <button
-                                                        onClick={() => {
-                                                            navigator.clipboard.writeText(`DATABASE_URL=${dbUrl}\nDATABASE_AUTH_TOKEN=${dbToken}`);
-                                                            toast.success('Variables copied to clipboard');
-                                                        }}
-                                                        className="flex-1 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-2"
-                                                    >
-                                                        <Copy className="h-3 w-3" /> Copy ENV
-                                                    </button>
-                                                    <a
-                                                        href="https://vercel.com/dashboard"
-                                                        target="_blank"
-                                                        className="p-2 bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-200 rounded-lg"
-                                                    >
-                                                        <Link className="h-4 w-4" />
-                                                    </a>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <button
-                                            onClick={() => setSetupStep('input')}
-                                            className="w-full text-xs text-gray-400 hover:text-gray-600"
-                                        >
-                                            ← Modify Credentials
-                                        </button>
-                                    </div>
-                                )}
+                            <div className="w-full md:w-auto flex flex-col sm:flex-row gap-4">
+                                <button
+                                    onClick={() => setShowDbConfig(true)}
+                                    className="px-8 py-4 bg-white text-blue-600 font-bold rounded-xl shadow-lg hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+                                >
+                                    <Database className="h-5 w-5" />
+                                    Configure Database
+                                </button>
+                                <a
+                                    href="https://vercel.com/dashboard"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-6 py-4 bg-white/20 text-white font-bold rounded-xl hover:bg-white/30 transition-all flex items-center justify-center gap-2"
+                                >
+                                    <Link className="h-5 w-5" />
+                                    Vercel Integration
+                                </a>
                             </div>
                         </div>
+                    </div>
+                )}
+
+                {/* Database Configuration Form */}
+                {showDbConfig && (
+                    <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <h2 className="text-xl font-bold flex items-center gap-2">
+                                    <Database className="h-6 w-6 text-blue-500" />
+                                    Database Connection
+                                </h2>
+                                <p className="text-sm text-gray-500 mt-1">
+                                    Connect to Turso (SQLite) or Supabase (PostgreSQL) for persistent storage
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowDbConfig(false)}
+                                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                            >
+                                <ChevronLeft className="h-5 w-5" />
+                            </button>
+                        </div>
+                        
+                        <Suspense fallback={
+                            <div className="flex items-center justify-center py-12">
+                                <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                            </div>
+                        }>
+                            <DatabaseConfigForm 
+                                onConnect={handleDbConnect}
+                                onCancel={() => setShowDbConfig(false)}
+                            />
+                        </Suspense>
                     </div>
                 )}
 
@@ -450,6 +413,62 @@ export default function SettingsPage() {
                                 </div>
                             </section>
                         )}
+
+                        {/* Database Status Card */}
+                        <section className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 shadow-sm">
+                            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4">Database</h2>
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`p-2 rounded-lg ${dbStatus?.isConfigured ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
+                                            {dbStatus?.provider === 'turso' ? <Globe className="h-5 w-5" /> : 
+                                             dbStatus?.provider === 'supabase' ? <Server className="h-5 w-5" /> : 
+                                             <Database className="h-5 w-5" />}
+                                        </div>
+                                        <div>
+                                            <div className="font-bold text-sm">
+                                                {dbStatus?.isConfigured 
+                                                    ? (dbStatus.provider === 'turso' ? 'Turso' : 'Supabase')
+                                                    : 'Not Connected'}
+                                            </div>
+                                            <div className="text-[10px] text-gray-400">
+                                                {dbStatus?.isConfigured ? 'Persistent Storage' : 'Demo Mode'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${dbStatus?.isConfigured ? 'bg-green-500 text-white' : 'bg-gray-100 dark:bg-gray-900 text-gray-400'}`}>
+                                        {dbStatus?.isConfigured ? 'ACTIVE' : 'OFFLINE'}
+                                    </div>
+                                </div>
+
+                                {!dbStatus?.isConfigured ? (
+                                    <button
+                                        onClick={() => setShowDbConfig(true)}
+                                        className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        <Database className="h-4 w-4" />
+                                        Connect Database
+                                    </button>
+                                ) : (
+                                    <div className="space-y-2">
+                                        <button
+                                            onClick={() => setShowDbConfig(true)}
+                                            className="w-full py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-xl transition-colors"
+                                        >
+                                            Reconfigure
+                                        </button>
+                                        <button
+                                            onClick={handleDisconnect}
+                                            disabled={isDisconnecting}
+                                            className="w-full py-2 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 text-sm font-medium rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                                        >
+                                            {isDisconnecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unlink className="h-4 w-4" />}
+                                            Disconnect
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </section>
 
                         <div className="p-5 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl border border-indigo-100 dark:border-indigo-800 text-xs text-indigo-700 dark:text-indigo-300 leading-relaxed space-y-2">
                             <div className="font-bold flex items-center gap-2">

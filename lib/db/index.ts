@@ -113,3 +113,82 @@ async function initializeDb(db: AnyDrizzle, isSQLite: boolean) {
         console.error('Failed to initialize database tables:', e);
     }
 }
+
+/**
+ * Reset and reinitialize database connection
+ * Used when switching database configuration at runtime
+ */
+export async function resetDatabaseConnection(): Promise<void> {
+    // Note: In serverless environments like Vercel, we can't reliably close connections
+    // as they may be shared across requests. We simply reset our internal state
+    // and let the next request create a new connection.
+    
+    _db = null;
+    _initialized = false;
+
+    // Clear module cache for config service to force re-read
+    const { configService } = await import('../config/config-service');
+    configService.clearCache();
+
+    console.log('Database connection reset. Will reinitialize on next getDb() call.');
+}
+
+/**
+ * Test database connection without initializing tables
+ * Used for connection testing in settings
+ */
+export async function testDatabaseConnection(
+    url: string,
+    authToken?: string
+): Promise<{ success: boolean; message: string; latency?: number }> {
+    const start = Date.now();
+    
+    try {
+        const isSQLite = url.startsWith('libsql://') || url.startsWith('file:');
+        
+        if (isSQLite) {
+            const { createClient } = await import('@libsql/client');
+            const client = createClient({
+                url,
+                authToken,
+            });
+            
+            // Test connection with a simple query
+            await client.execute('SELECT 1');
+            
+            const latency = Date.now() - start;
+            return {
+                success: true,
+                message: `Connected to Turso successfully (${latency}ms)`,
+                latency
+            };
+        } else {
+            const postgres = (await import('postgres')).default;
+            const client = postgres(url, {
+                max: 1, // Single connection for testing
+                idle_timeout: 5,
+                connect_timeout: 5,
+            });
+            
+            // Test connection
+            await client`SELECT 1`;
+            
+            // Close test connection
+            await client.end();
+            
+            const latency = Date.now() - start;
+            return {
+                success: true,
+                message: `Connected to PostgreSQL successfully (${latency}ms)`,
+                latency
+            };
+        }
+    } catch (error) {
+        const latency = Date.now() - start;
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : 'Connection failed',
+            latency
+        };
+    }
+}
