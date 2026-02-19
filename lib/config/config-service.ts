@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { encrypt, decrypt } from '../utils/encryption';
 import fs from 'fs';
 import path from 'path';
-import { put, head, list } from '@vercel/blob';
+import * as blobSafe from '../utils/blob-safe';
 
 const SENSITIVE_KEYS = [
     'OPENAI_API_KEY',
@@ -58,10 +58,16 @@ export class ConfigService {
             return this.blobConfig;
         }
 
+        // Skip if no BLOB_READ_WRITE_TOKEN (not on Vercel or not configured)
+        if (!process.env.BLOB_READ_WRITE_TOKEN) {
+            this.blobConfig = {};
+            return this.blobConfig;
+        }
+
         try {
             // Try to list blobs with the config key
-            const blobs = await list({ prefix: BLOB_CONFIG_KEY });
-            const configBlob = blobs.blobs.find(b => b.pathname === BLOB_CONFIG_KEY);
+            const blobs = await blobSafe.list({ prefix: BLOB_CONFIG_KEY });
+            const configBlob = blobs.blobs.find((b: any) => b.pathname === BLOB_CONFIG_KEY);
             
             if (configBlob) {
                 // Fetch the blob content
@@ -74,7 +80,7 @@ export class ConfigService {
                 }
             }
         } catch (e) {
-            console.log('No config found in Vercel Blob');
+            console.log('No config found in Vercel Blob:', e);
         }
 
         this.blobConfig = {};
@@ -85,9 +91,14 @@ export class ConfigService {
      * Save configuration to Vercel Blob (for Vercel deployments)
      */
     private async saveBlobConfig(config: Record<string, string>): Promise<void> {
+        // Skip if no BLOB_READ_WRITE_TOKEN
+        if (!process.env.BLOB_READ_WRITE_TOKEN) {
+            throw new Error('BLOB_READ_WRITE_TOKEN not configured');
+        }
+
         try {
             const jsonString = JSON.stringify(config, null, 2);
-            await put(BLOB_CONFIG_KEY, jsonString, {
+            await blobSafe.put(BLOB_CONFIG_KEY, jsonString, {
                 access: 'public',
                 addRandomSuffix: false,
             });
