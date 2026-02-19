@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
     Shield, Database, Cloud, Sparkles, ChevronLeft, Save, Loader2,
     CheckCircle2, AlertCircle, Copy, Link, Wand2, Terminal, Info,
-    HardDrive, Download, Upload, Globe, Server, Unlink
+    HardDrive, Download, Upload, Globe, Server
 } from 'lucide-react';
 
 // Lazy load DatabaseConfigForm to reduce initial bundle size
@@ -22,7 +22,6 @@ export default function SettingsPage() {
 
     // -- State: Database Setup Wizard --
     const [showDbConfig, setShowDbConfig] = useState(false);
-    const [isDisconnecting, setIsDisconnecting] = useState(false);
 
     // -- State: AI & S3 Config --
     const [aiKey, setAiKey] = useState('');
@@ -87,41 +86,6 @@ export default function SettingsPage() {
         } catch (e) {
             console.error('Failed to fetch database status:', e);
         }
-    };
-
-    const handleDisconnect = async () => {
-        if (!confirm('Are you sure you want to disconnect from the database? This will switch to demo mode and any unsaved data may be lost.')) {
-            return;
-        }
-        
-        setIsDisconnecting(true);
-        try {
-            const res = await fetch('/api/database/disconnect', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ confirm: true }),
-            });
-            const data = await res.json();
-            
-            if (data.success) {
-                toast.success('Disconnected from database');
-                fetchDbStatus();
-                fetchConfig();
-            } else {
-                toast.error(data.message || 'Failed to disconnect');
-            }
-        } catch (e) {
-            toast.error('Failed to disconnect from database');
-        } finally {
-            setIsDisconnecting(false);
-        }
-    };
-
-    const handleDbConnect = () => {
-        setShowDbConfig(false);
-        fetchDbStatus();
-        fetchConfig();
-        toast.success('Database configuration updated');
     };
 
     // -- Config Actions --
@@ -346,8 +310,7 @@ export default function SettingsPage() {
                             </div>
                         }>
                             <DatabaseConfigForm 
-                                onConnect={handleDbConnect}
-                                onCancel={() => setShowDbConfig(false)}
+                                onClose={() => setShowDbConfig(false)}
                             />
                         </Suspense>
                     </div>
@@ -450,21 +413,13 @@ export default function SettingsPage() {
                                         Connect Database
                                     </button>
                                 ) : (
-                                    <div className="space-y-2">
-                                        <button
-                                            onClick={() => setShowDbConfig(true)}
-                                            className="w-full py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-xl transition-colors"
-                                        >
-                                            Reconfigure
-                                        </button>
-                                        <button
-                                            onClick={handleDisconnect}
-                                            disabled={isDisconnecting}
-                                            className="w-full py-2 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 text-sm font-medium rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                                        >
-                                            {isDisconnecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unlink className="h-4 w-4" />}
-                                            Disconnect
-                                        </button>
+                                    <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-xl">
+                                        <p className="text-sm text-green-700 dark:text-green-300">
+                                            ✅ Database connected
+                                        </p>
+                                        <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                                            Configuration is managed via environment variables
+                                        </p>
                                     </div>
                                 )}
                             </div>

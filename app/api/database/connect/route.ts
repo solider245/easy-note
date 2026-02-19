@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { testDatabaseConnection } from '@/lib/db';
-import { configService } from '@/lib/config/config-service';
-import { reloadStorage, getStorageType } from '@/lib/storage';
 
+/**
+ * Test database connection (read-only)
+ * Used in settings page to verify user-provided credentials
+ * Note: Actual database configuration must be set via environment variables
+ */
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
@@ -48,37 +51,16 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // First, test the connection
+        // Test the connection
         const testResult = await testDatabaseConnection(url, token);
-        if (!testResult.success) {
-            return NextResponse.json(testResult, { status: 400 });
-        }
 
-        // Save configuration
-        await configService.saveDatabaseConfig({
-            provider: body.provider,
-            url,
-            token
-        });
-
-        // Reload storage to use the new database
-        const storage = await reloadStorage();
-
-        // Get new storage type
-        const storageType = await getStorageType();
-
-        return NextResponse.json({
-            success: true,
-            message: `Connected to ${body.provider === 'turso' ? 'Turso' : 'Supabase'} successfully`,
-            storageType,
-            latency: testResult.latency
-        });
+        return NextResponse.json(testResult);
     } catch (error) {
-        console.error('Database connect error:', error);
+        console.error('Database test error:', error);
         return NextResponse.json(
             { 
                 success: false, 
-                message: error instanceof Error ? error.message : 'Failed to connect database' 
+                message: error instanceof Error ? error.message : 'Failed to test connection' 
             },
             { status: 500 }
         );

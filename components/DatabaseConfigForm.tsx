@@ -1,38 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { Database, Globe, Server, Check, AlertCircle, Loader2, X } from 'lucide-react';
+import { Database, Globe, Server, Check, AlertCircle, Loader2, ExternalLink, Copy, CheckCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Provider = 'turso' | 'supabase';
 type SupabaseMode = 'connectionString' | 'manual';
 
-interface DatabaseConfig {
-    provider: Provider;
-    // Turso
-    url?: string;
-    token?: string;
-    // Supabase Connection String
-    connectionString?: string;
-    // Supabase Manual
-    host?: string;
-    port?: number;
-    database?: string;
-    username?: string;
-    password?: string;
-    ssl?: boolean;
-}
-
 interface DatabaseConfigFormProps {
-    onConnect?: () => void;
-    onCancel?: () => void;
+    onClose?: () => void;
 }
 
-export default function DatabaseConfigForm({ onConnect, onCancel }: DatabaseConfigFormProps) {
+export default function DatabaseConfigForm({ onClose }: DatabaseConfigFormProps) {
     const [provider, setProvider] = useState<Provider>('turso');
     const [supabaseMode, setSupabaseMode] = useState<SupabaseMode>('connectionString');
-    const [config, setConfig] = useState<DatabaseConfig>({
-        provider: 'turso',
+    const [config, setConfig] = useState({
         url: '',
         token: '',
         connectionString: '',
@@ -44,8 +26,8 @@ export default function DatabaseConfigForm({ onConnect, onCancel }: DatabaseConf
         ssl: true,
     });
     const [isTesting, setIsTesting] = useState(false);
-    const [isConnecting, setIsConnecting] = useState(false);
     const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+    const [copied, setCopied] = useState(false);
 
     const handleTest = async () => {
         setIsTesting(true);
@@ -80,7 +62,7 @@ export default function DatabaseConfigForm({ onConnect, onCancel }: DatabaseConf
             setTestResult(result);
 
             if (result.success) {
-                toast.success('Connection test successful');
+                toast.success('Connection test successful!');
             } else {
                 toast.error('Connection test failed: ' + result.message);
             }
@@ -92,47 +74,26 @@ export default function DatabaseConfigForm({ onConnect, onCancel }: DatabaseConf
         }
     };
 
-    const handleConnect = async () => {
-        setIsConnecting(true);
-
-        try {
-            const body: any = { provider };
-
-            if (provider === 'turso') {
-                body.url = config.url;
-                body.token = config.token;
+    const getEnvVariables = () => {
+        if (provider === 'turso') {
+            return `TURSO_DATABASE_URL=${config.url}
+TURSO_AUTH_TOKEN=${config.token}`;
+        } else {
+            if (supabaseMode === 'connectionString') {
+                return `DATABASE_URL=${config.connectionString}`;
             } else {
-                if (supabaseMode === 'connectionString') {
-                    body.connectionString = config.connectionString;
-                } else {
-                    body.host = config.host;
-                    body.port = config.port;
-                    body.database = config.database;
-                    body.username = config.username;
-                    body.password = config.password;
-                    body.ssl = config.ssl;
-                }
+                const ssl = config.ssl ? '?sslmode=require' : '';
+                const url = `postgresql://${config.username}:${config.password}@${config.host}:${config.port}/${config.database}${ssl}`;
+                return `DATABASE_URL=${url}`;
             }
-
-            const res = await fetch('/api/database/connect', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-            });
-
-            const result = await res.json();
-
-            if (result.success) {
-                toast.success('Database connected successfully');
-                onConnect?.();
-            } else {
-                toast.error('Failed to connect: ' + result.message);
-            }
-        } catch (error) {
-            toast.error('Failed to connect to database');
-        } finally {
-            setIsConnecting(false);
         }
+    };
+
+    const copyEnvVariables = () => {
+        navigator.clipboard.writeText(getEnvVariables());
+        setCopied(true);
+        toast.success('Environment variables copied!');
+        setTimeout(() => setCopied(false), 2000);
     };
 
     return (
@@ -142,7 +103,6 @@ export default function DatabaseConfigForm({ onConnect, onCancel }: DatabaseConf
                 <button
                     onClick={() => {
                         setProvider('turso');
-                        setConfig({ ...config, provider: 'turso' });
                         setTestResult(null);
                     }}
                     className={`flex items-center gap-3 p-4 rounded-lg border-2 transition-all ${
@@ -161,7 +121,6 @@ export default function DatabaseConfigForm({ onConnect, onCancel }: DatabaseConf
                 <button
                     onClick={() => {
                         setProvider('supabase');
-                        setConfig({ ...config, provider: 'supabase' });
                         setTestResult(null);
                     }}
                     className={`flex items-center gap-3 p-4 rounded-lg border-2 transition-all ${
@@ -178,219 +137,211 @@ export default function DatabaseConfigForm({ onConnect, onCancel }: DatabaseConf
                 </button>
             </div>
 
-            {/* Turso Form */}
-            {provider === 'turso' && (
-                <div className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium mb-1.5">
-                            Database URL <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                            type="text"
-                            value={config.url}
-                            onChange={(e) => setConfig({ ...config, url: e.target.value })}
-                            placeholder="libsql://your-db.turso.io"
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-800"
-                        />
-                        <p className="mt-1 text-xs text-gray-500">
-                            Find this in your Turso dashboard
-                        </p>
-                    </div>
+            {/* Configuration Form */}
+            <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-5 space-y-4">
+                <h3 className="font-medium flex items-center gap-2">
+                    <Database className="w-4 h-4" />
+                    Test Your Configuration
+                </h3>
 
-                    <div>
-                        <label className="block text-sm font-medium mb-1.5">
-                            Auth Token <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                            type="password"
-                            value={config.token}
-                            onChange={(e) => setConfig({ ...config, token: e.target.value })}
-                            placeholder="eyJhbGciOiJFZERTQSIs..."
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-800"
-                        />
-                        <p className="mt-1 text-xs text-gray-500">
-                            Generate a token from Turso dashboard → Settings → Tokens
-                        </p>
-                    </div>
-                </div>
-            )}
-
-            {/* Supabase Form */}
-            {provider === 'supabase' && (
-                <div className="space-y-4">
-                    {/* Connection Mode Toggle */}
-                    <div className="flex gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                        <button
-                            onClick={() => setSupabaseMode('connectionString')}
-                            className={`flex-1 py-2 px-3 text-sm rounded-md transition-colors ${
-                                supabaseMode === 'connectionString'
-                                    ? 'bg-white dark:bg-gray-700 shadow-sm'
-                                    : 'text-gray-600 dark:text-gray-400'
-                            }`}
-                        >
-                            Connection String
-                        </button>
-                        <button
-                            onClick={() => setSupabaseMode('manual')}
-                            className={`flex-1 py-2 px-3 text-sm rounded-md transition-colors ${
-                                supabaseMode === 'manual'
-                                    ? 'bg-white dark:bg-gray-700 shadow-sm'
-                                    : 'text-gray-600 dark:text-gray-400'
-                            }`}
-                        >
-                            Manual Settings
-                        </button>
-                    </div>
-
-                    {supabaseMode === 'connectionString' ? (
+                {provider === 'turso' ? (
+                    <div className="space-y-3">
                         <div>
-                            <label className="block text-sm font-medium mb-1.5">
-                                Connection String <span className="text-red-500">*</span>
-                            </label>
+                            <label className="block text-sm font-medium mb-1">Database URL</label>
                             <input
                                 type="text"
-                                value={config.connectionString}
-                                onChange={(e) => setConfig({ ...config, connectionString: e.target.value })}
-                                placeholder="postgresql://postgres:password@host.supabase.co:5432/postgres"
-                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white dark:bg-gray-800 font-mono text-sm"
+                                value={config.url}
+                                onChange={(e) => setConfig({ ...config, url: e.target.value })}
+                                placeholder="libsql://your-db.turso.io"
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
                             />
-                            <p className="mt-1 text-xs text-gray-500">
-                                Find this in Supabase dashboard → Settings → Database → Connection string
-                            </p>
                         </div>
-                    ) : (
-                        <div className="space-y-3">
-                            <div className="grid grid-cols-3 gap-3">
-                                <div className="col-span-2">
-                                    <label className="block text-sm font-medium mb-1.5">Host *</label>
-                                    <input
-                                        type="text"
-                                        value={config.host}
-                                        onChange={(e) => setConfig({ ...config, host: e.target.value })}
-                                        placeholder="xxxxxx.supabase.co"
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white dark:bg-gray-800"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1.5">Port</label>
-                                    <input
-                                        type="number"
-                                        value={config.port}
-                                        onChange={(e) => setConfig({ ...config, port: parseInt(e.target.value) || 5432 })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white dark:bg-gray-800"
-                                    />
-                                </div>
-                            </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Auth Token</label>
+                            <input
+                                type="password"
+                                value={config.token}
+                                onChange={(e) => setConfig({ ...config, token: e.target.value })}
+                                placeholder="eyJhbGciOiJFZERTQSIs..."
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
+                            />
+                        </div>
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        <div className="flex gap-2 p-1 bg-gray-200 dark:bg-gray-800 rounded-lg">
+                            <button
+                                onClick={() => setSupabaseMode('connectionString')}
+                                className={`flex-1 py-1.5 px-2 text-sm rounded-md transition-colors ${
+                                    supabaseMode === 'connectionString'
+                                        ? 'bg-white dark:bg-gray-700 shadow-sm'
+                                        : 'text-gray-600 dark:text-gray-400'
+                                }`}
+                            >
+                                Connection String
+                            </button>
+                            <button
+                                onClick={() => setSupabaseMode('manual')}
+                                className={`flex-1 py-1.5 px-2 text-sm rounded-md transition-colors ${
+                                    supabaseMode === 'manual'
+                                        ? 'bg-white dark:bg-gray-700 shadow-sm'
+                                        : 'text-gray-600 dark:text-gray-400'
+                                }`}
+                            >
+                                Manual Settings
+                            </button>
+                        </div>
 
+                        {supabaseMode === 'connectionString' ? (
                             <div>
-                                <label className="block text-sm font-medium mb-1.5">Database *</label>
+                                <label className="block text-sm font-medium mb-1">Connection String</label>
+                                <input
+                                    type="text"
+                                    value={config.connectionString}
+                                    onChange={(e) => setConfig({ ...config, connectionString: e.target.value })}
+                                    placeholder="postgresql://user:pass@host:5432/db"
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 font-mono text-sm"
+                                />
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-3 gap-2">
+                                    <div className="col-span-2">
+                                        <label className="block text-sm font-medium mb-1">Host</label>
+                                        <input
+                                            type="text"
+                                            value={config.host}
+                                            onChange={(e) => setConfig({ ...config, host: e.target.value })}
+                                            placeholder="xxxxxx.supabase.co"
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Port</label>
+                                        <input
+                                            type="number"
+                                            value={config.port}
+                                            onChange={(e) => setConfig({ ...config, port: parseInt(e.target.value) || 5432 })}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
+                                        />
+                                    </div>
+                                </div>
                                 <input
                                     type="text"
                                     value={config.database}
                                     onChange={(e) => setConfig({ ...config, database: e.target.value })}
-                                    placeholder="postgres"
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white dark:bg-gray-800"
+                                    placeholder="Database name"
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
                                 />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium mb-1.5">Username *</label>
                                 <input
                                     type="text"
                                     value={config.username}
                                     onChange={(e) => setConfig({ ...config, username: e.target.value })}
-                                    placeholder="postgres"
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white dark:bg-gray-800"
+                                    placeholder="Username"
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
                                 />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium mb-1.5">Password</label>
                                 <input
                                     type="password"
                                     value={config.password}
                                     onChange={(e) => setConfig({ ...config, password: e.target.value })}
-                                    placeholder="your-password"
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white dark:bg-gray-800"
+                                    placeholder="Password"
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
                                 />
                             </div>
+                        )}
+                    </div>
+                )}
 
-                            <label className="flex items-center gap-2">
-                                <input
-                                    type="checkbox"
-                                    checked={config.ssl}
-                                    onChange={(e) => setConfig({ ...config, ssl: e.target.checked })}
-                                    className="w-4 h-4 text-green-600 rounded"
-                                />
-                                <span className="text-sm">Use SSL (recommended)</span>
-                            </label>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* Test Result */}
-            {testResult && (
-                <div className={`flex items-center gap-2 p-3 rounded-lg ${
-                    testResult.success 
-                        ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' 
-                        : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
-                }`}>
-                    {testResult.success ? (
-                        <Check className="w-4 h-4" />
-                    ) : (
-                        <AlertCircle className="w-4 h-4" />
-                    )}
-                    <span className="text-sm">{testResult.message}</span>
-                </div>
-            )}
-
-            {/* Actions */}
-            <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                {/* Test Button */}
                 <button
                     onClick={handleTest}
-                    disabled={isTesting || isConnecting}
-                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    disabled={isTesting}
+                    className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
                     {isTesting ? (
-                        <span className="flex items-center gap-2">
+                        <>
                             <Loader2 className="w-4 h-4 animate-spin" />
                             Testing...
-                        </span>
+                        </>
                     ) : (
-                        'Test Connection'
+                        <>
+                            <Check className="w-4 h-4" />
+                            Test Connection
+                        </>
                     )}
                 </button>
 
-                <button
-                    onClick={handleConnect}
-                    disabled={isTesting || isConnecting}
-                    className={`flex-1 px-4 py-2 rounded-lg text-white font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                        provider === 'turso'
-                            ? 'bg-blue-600 hover:bg-blue-700'
-                            : 'bg-green-600 hover:bg-green-700'
-                    }`}
-                >
-                    {isConnecting ? (
-                        <span className="flex items-center justify-center gap-2">
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Connecting...
-                        </span>
-                    ) : (
-                        'Save & Connect'
-                    )}
-                </button>
-
-                {onCancel && (
-                    <button
-                        onClick={onCancel}
-                        disabled={isTesting || isConnecting}
-                        className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                    >
-                        Cancel
-                    </button>
+                {/* Test Result */}
+                {testResult && (
+                    <div className={`p-3 rounded-lg flex items-center gap-2 ${
+                        testResult.success 
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' 
+                            : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                    }`}>
+                        {testResult.success ? <Check className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                        <span className="text-sm">{testResult.message}</span>
+                    </div>
                 )}
             </div>
+
+            {/* Environment Variables Section */}
+            {testResult?.success && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-5 space-y-3">
+                    <h3 className="font-medium text-blue-900 dark:text-blue-300 flex items-center gap-2">
+                        <CheckCheck className="w-4 h-4" />
+                        Configuration Verified
+                    </h3>
+                    <p className="text-sm text-blue-700 dark:text-blue-400">
+                        Copy these environment variables to your Vercel project:
+                    </p>
+                    <div className="relative">
+                        <pre className="bg-gray-900 text-gray-100 p-3 rounded-lg text-sm font-mono overflow-x-auto">
+                            {getEnvVariables()}
+                        </pre>
+                        <button
+                            onClick={copyEnvVariables}
+                            className="absolute top-2 right-2 p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                            title="Copy to clipboard"
+                        >
+                            {copied ? <CheckCheck className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                    </div>
+                    <div className="flex gap-2">
+                        <a
+                            href="https://vercel.com/dashboard"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                        >
+                            Open Vercel Dashboard
+                            <ExternalLink className="w-3 h-3" />
+                        </a>
+                    </div>
+                </div>
+            )}
+
+            {/* Instructions */}
+            <div className="bg-gray-100 dark:bg-gray-800 rounded-xl p-4 text-sm text-gray-600 dark:text-gray-400 space-y-2">
+                <p className="font-medium text-gray-900 dark:text-gray-200">How to configure:</p>
+                <ol className="list-decimal list-inside space-y-1">
+                    <li>Fill in your database credentials above</li>
+                    <li>Click "Test Connection" to verify</li>
+                    <li>Copy the environment variables</li>
+                    <li>Go to Vercel Dashboard → Your Project → Settings → Environment Variables</li>
+                    <li>Paste the variables and save</li>
+                    <li>Redeploy your project</li>
+                </ol>
+            </div>
+
+            {/* Close Button */}
+            {onClose && (
+                <button
+                    onClick={onClose}
+                    className="w-full py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                    Close
+                </button>
+            )}
         </div>
     );
 }
