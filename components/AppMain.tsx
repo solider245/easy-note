@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
+import dynamic from 'next/dynamic';
 import NoteList from '@/components/NoteList';
-import MilkdownEditor from '@/components/Editor';
 import { LoadingSkeleton } from '@/components/Skeleton';
 import SecurityWarning from '@/components/SecurityWarning';
 import UsageBanner from '@/components/UsageBanner';
@@ -12,8 +12,27 @@ import debounce from 'lodash.debounce';
 import { toast } from 'sonner';
 import { Pin, Trash2, Settings, Download, LogOut, Menu, Tag, X, Share2, LayoutTemplate, FileUp, FileDown, Copy } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
-import CommandPalette from '@/components/CommandPalette';
-import NoteTemplates from '@/components/NoteTemplates';
+
+// 动态导入重型组件
+const MilkdownEditor = dynamic(() => import('@/components/Editor'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-full">
+      <div className="flex items-center gap-2 text-gray-400">
+        <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+        <span className="text-sm">Loading editor...</span>
+      </div>
+    </div>
+  )
+});
+
+const CommandPalette = dynamic(() => import('@/components/CommandPalette'), {
+  ssr: false
+});
+
+const NoteTemplates = dynamic(() => import('@/components/NoteTemplates'), {
+  ssr: false
+});
 
 export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: boolean }) {
   const [notes, setNotes] = useState<NoteMeta[]>([]);
@@ -45,18 +64,32 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
     }
   }, []);
 
+  // 优化后的初始化逻辑：串行加载，优先加载笔记列表
   useEffect(() => {
     const init = async () => {
       try {
+        // 第一步：优先加载笔记列表（对用户最重要）
         await fetchNotes();
-        const configRes = await fetch('/api/status/config');
-        const configData = await configRes.json();
-        setConfig(configData);
-        const usageRes = await fetch('/api/status');
-        if (usageRes.ok) {
-          const usageData = await usageRes.json();
-          if (usageData.usage) setUsage(usageData.usage);
-        }
+        
+        // 显示骨架屏一段时间后，再加载其他数据
+        // 让侧边栏先显示出来
+        
+        // 第二步：延迟加载配置和用量（对功能次要）
+        setTimeout(async () => {
+          try {
+            const configRes = await fetch('/api/status/config');
+            const configData = await configRes.json();
+            setConfig(configData);
+            
+            const usageRes = await fetch('/api/status');
+            if (usageRes.ok) {
+              const usageData = await usageRes.json();
+              if (usageData.usage) setUsage(usageData.usage);
+            }
+          } catch (e) {
+            console.error('Failed to load config/usage', e);
+          }
+        }, 100);
       } catch (e) {
         console.error('Initialization failed', e);
       } finally {
@@ -65,6 +98,19 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
     };
     init();
   }, [fetchNotes]);
+
+  // 预加载编辑器：骨架屏显示 1.5 秒后预加载
+  useEffect(() => {
+    if (!loading) {
+      // 应用加载完成后，延迟预加载编辑器
+      const timer = setTimeout(() => {
+        // 预加载编辑器组件
+        import('@/components/Editor');
+      }, 1500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -99,7 +145,7 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [selectedNote, showTagInput]);
+  }, [selectedNote, showTagInput, showCommandPalette]);
 
   // Focus tag input when shown
   useEffect(() => {
@@ -723,7 +769,7 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
               {/* Status Bar */}
               <div className="px-4 py-1.5 border-t border-gray-100 dark:border-gray-800 flex items-center gap-4 text-[11px] text-gray-400 dark:text-gray-500 bg-gray-50/50 dark:bg-gray-900/30 select-none">
                 {(() => {
-                  const text = selectedNote.content.replace(/[#*`_~\[\]()>!|-]/g, '').trim();
+                  const text = selectedNote.content.replace(/[#*`_[\]()>!|-]/g, '').trim();
                   const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
                   const chars = text.replace(/\s/g, '').length;
                   const readingMins = Math.max(1, Math.ceil(words / 200));
