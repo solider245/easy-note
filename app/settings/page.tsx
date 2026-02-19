@@ -6,8 +6,9 @@ import { toast } from 'sonner';
 import {
     Shield, Database, Cloud, Sparkles, ChevronLeft, Save, Loader2,
     CheckCircle2, AlertCircle, Copy, Link, Wand2, Terminal, Info,
-    HardDrive, Download, Upload, Globe, Server
+    HardDrive, Download, Upload, Globe, Server, Zap, Settings
 } from 'lucide-react';
+import CollapsibleSection from '@/components/CollapsibleSection';
 
 // Lazy load DatabaseConfigForm to reduce initial bundle size
 const DatabaseConfigForm = lazy(() => import('@/components/DatabaseConfigForm'));
@@ -33,6 +34,13 @@ export default function SettingsPage() {
     const [s3SecretKey, setS3SecretKey] = useState('');
     const [isSavingConfig, setIsSavingConfig] = useState<string | null>(null);
 
+    // -- Feature Flags (detected from config) --
+    const [features, setFeatures] = useState({
+        ai: false,
+        s3: false,
+        sharing: false
+    });
+
     // -- State: Security --
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -52,6 +60,12 @@ export default function SettingsPage() {
             const res = await fetch('/api/status/config');
             const data = await res.json();
             setConfigStatus(data);
+            // Detect feature flags from config
+            setFeatures({
+                ai: data.ai?.openai || false,
+                s3: data.s3?.connected || false,
+                sharing: data.sharing?.enabled || false
+            });
         } catch (e) {
             toast.error('Failed to fetch system status');
         }
@@ -434,82 +448,14 @@ export default function SettingsPage() {
                     </div>
 
                     {/* Main Settings Body */}
-                    <div className="lg:col-span-2 space-y-8">
-                        {/* Section: AI */}
-                        <section className="bg-white dark:bg-gray-800 rounded-3xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm relative overflow-hidden group">
-                            {isDemo && (
-                                <div className="absolute inset-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm z-10 flex items-center justify-center">
-                                    <div className="text-center p-6 space-y-3">
-                                        <Terminal className="h-8 w-8 mx-auto text-blue-500" />
-                                        <p className="text-sm font-bold text-gray-600 dark:text-gray-300">Connect DB to Unlock AI Persistence</p>
-                                    </div>
-                                </div>
-                            )}
-                            <h3 className="text-xl font-bold mb-6 flex items-center gap-3">
-                                <Sparkles className="h-6 w-6 text-purple-500" />
-                                Writing Assistant
-                            </h3>
-                            <div className="space-y-5">
-                                <ConfigInput
-                                    label="OpenAI API Key"
-                                    value={aiKey}
-                                    onChange={setAiKey}
-                                    placeholder="sk-..."
-                                    type="password"
-                                    configKey="OPENAI_API_KEY"
-                                    onSave={saveConfig}
-                                />
-                                <ConfigInput
-                                    label="Preferred Model"
-                                    value={aiModel}
-                                    onChange={setAiModel}
-                                    placeholder="gpt-4o-mini"
-                                    configKey="OPENAI_MODEL"
-                                    onSave={saveConfig}
-                                />
-                            </div>
-                        </section>
-
-                        {/* Section: Cloud Storage (S3) */}
-                        <section className="bg-white dark:bg-gray-800 rounded-3xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm relative overflow-hidden">
-                            {isDemo && (
-                                <div className="absolute inset-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm z-10 flex items-center justify-center">
-                                    <div className="text-center p-6 space-y-3">
-                                        <Cloud className="h-8 w-8 mx-auto text-blue-500" />
-                                        <p className="text-sm font-bold text-gray-600 dark:text-gray-300">Connect DB to Unlock Storage Sync</p>
-                                    </div>
-                                </div>
-                            )}
-                            <h3 className="text-xl font-bold mb-6 flex items-center gap-3">
-                                <Cloud className="h-6 w-6 text-blue-500" />
-                                External Media Sync (S3)
-                            </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                <div className="md:col-span-2">
-                                    <ConfigInput label="Endpoint URL" value={s3Endpoint} onChange={setS3Endpoint} placeholder="https://..." configKey="S3_ENDPOINT" onSave={saveConfig} />
-                                </div>
-                                <ConfigInput label="Region" value={s3Region} onChange={setS3Region} placeholder="auto" configKey="S3_REGION" onSave={saveConfig} />
-                                <ConfigInput label="Bucket Name" value={s3Bucket} onChange={setS3Bucket} placeholder="my-notes" configKey="S3_BUCKET" onSave={saveConfig} />
-                                <ConfigInput label="Access Key ID" value={s3AccessKey} onChange={setS3AccessKey} placeholder="AKIA..." configKey="S3_ACCESS_KEY_ID" onSave={saveConfig} />
-                                <ConfigInput label="Secret Key" value={s3SecretKey} onChange={setS3SecretKey} placeholder="Required" type="password" configKey="S3_SECRET_ACCESS_KEY" onSave={saveConfig} />
-                            </div>
-                        </section>
-
-                        {/* Section: Data Management */}
-                        <section className="bg-white dark:bg-gray-800 rounded-3xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm relative overflow-hidden">
-                            {isDemo && (
-                                <div className="absolute inset-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm z-10 flex items-center justify-center">
-                                    <div className="text-center p-6 space-y-3">
-                                        <HardDrive className="h-8 w-8 mx-auto text-blue-500" />
-                                        <p className="text-sm font-bold text-gray-600 dark:text-gray-300">Connect DB to Unlock Migration</p>
-                                    </div>
-                                </div>
-                            )}
+                    <div className="lg:col-span-2 space-y-6">
+                        {/* Core: Data Management */}
+                        <section className="bg-white dark:bg-gray-800 rounded-3xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
                             <h3 className="text-xl font-bold mb-2 flex items-center gap-3">
                                 <HardDrive className="h-6 w-6 text-indigo-500" />
-                                Data Portability
+                                Data Management
                             </h3>
-                            <p className="text-sm text-gray-500 mb-8">Export your data for backup or migrate from another instance.</p>
+                            <p className="text-sm text-gray-500 mb-6">Backup and restore your notes</p>
 
                             <div className="flex flex-col md:flex-row gap-4">
                                 <button
@@ -539,31 +485,79 @@ export default function SettingsPage() {
                                     </div>
                                     <div className="text-left">
                                         <div className="font-bold text-sm">Import from JSON</div>
-                                        <div className="text-[10px] text-gray-400">Restore or merge previous backups</div>
+                                        <div className="text-[10px] text-gray-400">Restore or merge backups</div>
                                     </div>
                                 </label>
                             </div>
                         </section>
 
-                        {/* Section: Security */}
-                        <section className="bg-white dark:bg-gray-800 rounded-3xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm relative overflow-hidden">
-                            {isDemo && (
-                                <div className="absolute inset-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm z-10 flex items-center justify-center text-center">
-                                    <div className="p-6 space-y-3">
-                                        <Shield className="h-8 w-8 mx-auto text-red-500" />
-                                        <p className="text-sm font-bold text-gray-600 dark:text-gray-300 transition-all group-hover:scale-105">Connect DB to Manage Access</p>
+                        {/* Advanced: AI Assistant (only if enabled or configured) */}
+                        {(features.ai || !isDemo) && (
+                            <CollapsibleSection
+                                title="AI Writing Assistant"
+                                icon={<Sparkles className="w-5 h-5 text-purple-500" />}
+                                badge={features.ai ? 'Active' : 'Setup Required'}
+                                defaultCollapsed={!features.ai}
+                            >
+                                <div className="space-y-4">
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                                        AI-powered writing assistance. Requires OpenAI API key.
+                                    </p>
+                                    <ConfigInput
+                                        label="OpenAI API Key"
+                                        value={aiKey}
+                                        onChange={setAiKey}
+                                        placeholder="sk-..."
+                                        type="password"
+                                        configKey="OPENAI_API_KEY"
+                                        onSave={saveConfig}
+                                    />
+                                    <ConfigInput
+                                        label="Model"
+                                        value={aiModel}
+                                        onChange={setAiModel}
+                                        placeholder="gpt-4o-mini"
+                                        configKey="OPENAI_MODEL"
+                                        onSave={saveConfig}
+                                    />
+                                </div>
+                            </CollapsibleSection>
+                        )}
+
+                        {/* Advanced: S3 Storage (only if enabled or configured) */}
+                        {(features.s3 || !isDemo) && (
+                            <CollapsibleSection
+                                title="External Storage (S3)"
+                                icon={<Cloud className="w-5 h-5 text-blue-500" />}
+                                badge={features.s3 ? 'Active' : 'Setup Required'}
+                                defaultCollapsed={!features.s3}
+                            >
+                                <div className="space-y-4">
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                                        Store media files on S3-compatible storage (AWS, R2, MinIO).
+                                    </p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <ConfigInput label="Endpoint" value={s3Endpoint} onChange={setS3Endpoint} placeholder="https://..." configKey="S3_ENDPOINT" onSave={saveConfig} />
+                                        <ConfigInput label="Region" value={s3Region} onChange={setS3Region} placeholder="auto" configKey="S3_REGION" onSave={saveConfig} />
+                                        <ConfigInput label="Bucket" value={s3Bucket} onChange={setS3Bucket} placeholder="my-notes" configKey="S3_BUCKET" onSave={saveConfig} />
+                                        <ConfigInput label="Access Key" value={s3AccessKey} onChange={setS3AccessKey} placeholder="AKIA..." configKey="S3_ACCESS_KEY_ID" onSave={saveConfig} />
+                                        <ConfigInput label="Secret Key" value={s3SecretKey} onChange={setS3SecretKey} placeholder="Required" type="password" configKey="S3_SECRET_ACCESS_KEY" onSave={saveConfig} />
                                     </div>
                                 </div>
-                            )}
-                            <h3 className="text-xl font-bold mb-6 flex items-center gap-3">
-                                <Shield className="h-6 w-6 text-red-500" />
-                                System Security
-                            </h3>
-                            <form onSubmit={handlePasswordSubmit} className="space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            </CollapsibleSection>
+                        )}
+
+                        {/* Advanced: Security */}
+                        <CollapsibleSection
+                            title="Security Settings"
+                            icon={<Shield className="w-5 h-5 text-red-500" />}
+                            defaultCollapsed={true}
+                        >
+                            <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="md:col-span-2 space-y-1.5">
-                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Current Admin Password</label>
-                                        <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required className="w-full px-3 py-3 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" />
+                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Current Password</label>
+                                        <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required className="w-full px-3 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" />
                                     </div>
                                     <div className="space-y-1.5">
                                         <div className="flex justify-between items-center">
@@ -573,19 +567,19 @@ export default function SettingsPage() {
                                                 onClick={generateStrongPassword}
                                                 className="text-[10px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
                                             >
-                                                <Wand2 className="h-3 w-3" /> Auto-suggest
+                                                <Wand2 className="h-3 w-3" /> Generate
                                             </button>
                                         </div>
-                                        <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={6} className="w-full px-3 py-3 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" />
+                                        <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={6} className="w-full px-3 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Confirm New Password</label>
-                                        <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className="w-full px-3 py-3 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" />
+                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Confirm Password</label>
+                                        <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className="w-full px-3 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" />
                                     </div>
                                 </div>
 
                                 {securityMessage && (
-                                    <div className={`p-4 rounded-xl text-xs font-bold flex items-center gap-2 ${securityStatus === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                    <div className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${securityStatus === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                         {securityStatus === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
                                         {securityMessage}
                                     </div>
@@ -594,13 +588,13 @@ export default function SettingsPage() {
                                 <button
                                     type="submit"
                                     disabled={securityStatus === 'loading'}
-                                    className="w-full md:w-auto px-10 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold rounded-xl shadow-lg hover:opacity-90 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                                    className="px-6 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold rounded-xl hover:opacity-90 disabled:opacity-50 transition-all flex items-center gap-2"
                                 >
                                     {securityStatus === 'loading' && <Loader2 className="h-4 w-4 animate-spin" />}
-                                    Apply Password Update
+                                    Update Password
                                 </button>
                             </form>
-                        </section>
+                        </CollapsibleSection>
                     </div>
                 </div>
             </div>
