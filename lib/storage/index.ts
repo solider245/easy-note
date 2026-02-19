@@ -1,65 +1,79 @@
 import type { StorageAdapter } from '../types';
 
 let _instance: StorageAdapter | null = null;
+let _storageType: 'database' | 'blob' | 'memory' | null = null;
 
+/**
+ * Initialize storage at startup
+ * Determines storage type based on environment variables only
+ * No runtime switching supported - configuration is read-only
+ */
 export async function getStorage(): Promise<StorageAdapter> {
     if (_instance) return _instance;
 
-    // Check config service first (for runtime database switching)
-    const { configService } = await import('../config/config-service');
-    const dbConfig = await configService.getDatabaseConfig();
-    
-    // Also check legacy env vars for backward compatibility
-    const hasDb = dbConfig || process.env.DATABASE_URL || process.env.TURSO_DATABASE_URL;
+    const storageType = await getStorageType();
 
-    if (hasDb) {
-        const { DbAdapter } = await import('./db-adapter');
-        _instance = new DbAdapter();
-        return _instance;
+    switch (storageType) {
+        case 'database':
+            const { DbAdapter } = await import('./db-adapter');
+            _instance = new DbAdapter();
+            break;
+        
+        case 'blob':
+            const { BlobAdapter } = await import('./blob-adapter');
+            _instance = new BlobAdapter();
+            break;
+        
+        case 'memory':
+        default:
+            // Memory mode only available in development
+            if (process.env.NODE_ENV === 'production') {
+                throw new Error(
+                    'Memory storage is not available in production. ' +
+                    'Please configure a database (Turso or Supabase) or Vercel Blob. ' +
+                    'See docs/DEPLOYMENT.md for setup instructions.'
+                );
+            }
+            const { MemoryAdapter } = await import('./memory-adapter');
+            _instance = new MemoryAdapter();
+            break;
     }
 
-    // Check for Vercel Blob token (env var only, no DB lookup needed here)
-    const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
-    if (blobToken) {
-        const { BlobAdapter } = await import('./blob-adapter');
-        _instance = new BlobAdapter();
-        return _instance;
-    }
-
-    // Fall back to in-memory storage (demo mode)
-    const { MemoryAdapter } = await import('./memory-adapter');
-    _instance = new MemoryAdapter();
     return _instance;
 }
 
 /**
- * Reload storage adapter
- * Used after switching database configuration at runtime
- */
-export async function reloadStorage(): Promise<StorageAdapter> {
-    // Clear cached instance
-    _instance = null;
-    
-    // Force re-initialization
-    return getStorage();
-}
-
-/**
- * Get current storage type without initializing
- * Useful for checking storage status
+ * Get storage type based on environment variables
+ * Priority: Database > Blob > Memory (development only)
  */
 export async function getStorageType(): Promise<'database' | 'blob' | 'memory'> {
-    // Check config service first
-    const { configService } = await import('../config/config-service');
-    const dbConfig = await configService.getDatabaseConfig();
-    
-    if (dbConfig || process.env.DATABASE_URL || process.env.TURSO_DATABASE_URL) {
+    if (_storageType) return _storageType;
+
+    // Priority 1: Database (Turso or PostgreSQL)
+    if (process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL) {
+        _storageType = 'database';
         return 'database';
     }
 
+    // Priority 2: Vercel Blob
     if (process.env.BLOB_READ_WRITE_TOKEN) {
+        _storageType = 'blob';
         return 'blob';
     }
 
+    // Priority 3: Memory (development only)
+    _storageType = 'memory';
     return 'memory';
+}
+
+/**
+ * Check if storage is properly configured
+ * Returns true if database or blob is configured
+ */
+export function isStorageConfigured(): boolean {
+    return !!(
+        process.env.TURSO_DATABASE_URL ||
+        process.env.DATABASE_URL ||
+        process.env.BLOB_READ_WRITE_TOKEN
+    );
 }
