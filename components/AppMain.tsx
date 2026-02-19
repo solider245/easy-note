@@ -10,7 +10,10 @@ import { Note, NoteMeta } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import debounce from 'lodash.debounce';
 import { toast } from 'sonner';
-import { Pin, Trash2, Settings, Download, LogOut, Menu, Tag, X } from 'lucide-react';
+import { Pin, Trash2, Settings, Download, LogOut, Menu, Tag, X, Share2, LayoutTemplate, FileUp, FileDown, Copy } from 'lucide-react';
+import ThemeToggle from '@/components/ThemeToggle';
+import CommandPalette from '@/components/CommandPalette';
+import NoteTemplates from '@/components/NoteTemplates';
 
 export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: boolean }) {
   const [notes, setNotes] = useState<NoteMeta[]>([]);
@@ -21,7 +24,11 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
   const [config, setConfig] = useState<any>(null);
   const [tagInput, setTagInput] = useState('');
   const [showTagInput, setShowTagInput] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const tagInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   // Load notes list
@@ -70,9 +77,16 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
         e.preventDefault();
         handleCreateNote();
       }
-      // Escape: deselect note on mobile / close tag input
+      // Cmd+P: command palette
+      if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
+        e.preventDefault();
+        setShowCommandPalette(v => !v);
+      }
+      // Escape: close modals / tag input
       if (e.key === 'Escape') {
-        if (showTagInput) {
+        if (showCommandPalette) {
+          setShowCommandPalette(false);
+        } else if (showTagInput) {
           setShowTagInput(false);
           setTagInput('');
         }
@@ -242,6 +256,43 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
     }
   };
 
+  const handleShare = async () => {
+    if (!selectedNote) return;
+    if (selectedNote.shareToken) {
+      // Already shared - copy link
+      const url = `${window.location.origin}/share/${selectedNote.shareToken}`;
+      await navigator.clipboard.writeText(url);
+      toast.success('Share link copied!', {
+        description: url,
+        action: { label: 'Open', onClick: () => window.open(url, '_blank') },
+      });
+    } else {
+      // Enable sharing
+      const res = await fetch(`/api/notes/${selectedNote.id}/share`, { method: 'POST' });
+      if (res.ok) {
+        const { shareToken } = await res.json();
+        const url = `${window.location.origin}/share/${shareToken}`;
+        setSelectedNote({ ...selectedNote, shareToken });
+        await navigator.clipboard.writeText(url);
+        toast.success('Sharing enabled! Link copied.', {
+          description: url,
+          action: { label: 'Open', onClick: () => window.open(url, '_blank') },
+        });
+      } else {
+        toast.error('Failed to create share link');
+      }
+    }
+  };
+
+  const handleUnshare = async () => {
+    if (!selectedNote?.shareToken) return;
+    const res = await fetch(`/api/notes/${selectedNote.id}/share`, { method: 'DELETE' });
+    if (res.ok) {
+      setSelectedNote({ ...selectedNote, shareToken: null });
+      toast.success('Sharing disabled');
+    }
+  };
+
   const handleRemoveTag = async (tag: string) => {
     if (!selectedNote) return;
     const newTags = (selectedNote.tags || []).filter(t => t !== tag);
@@ -265,6 +316,82 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
 
   const handleExport = () => {
     window.open('/api/export');
+  };
+
+  // Create note from template
+  const handleCreateFromTemplate = async (title: string, content: string) => {
+    try {
+      const res = await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content }),
+      });
+      if (res.ok) {
+        const newNote = await res.json();
+        setNotes(prev => [newNote, ...prev]);
+        setSelectedNote(newNote);
+        toast.success('Note created from template');
+      }
+    } catch {
+      toast.error('Failed to create note');
+    }
+  };
+
+  // Duplicate note
+  const handleDuplicateNote = async () => {
+    if (!selectedNote) return;
+    try {
+      const res = await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `${selectedNote.title} (Copy)`,
+          content: selectedNote.content,
+          tags: selectedNote.tags || [],
+        }),
+      });
+      if (res.ok) {
+        const newNote = await res.json();
+        setNotes(prev => [newNote, ...prev]);
+        setSelectedNote(newNote);
+        toast.success('Note duplicated');
+      }
+    } catch {
+      toast.error('Failed to duplicate note');
+    }
+  };
+
+  // Import markdown files
+  const handleImportMarkdown = async (files: FileList) => {
+    const mdFiles = Array.from(files).filter(f => f.name.endsWith('.md') || f.name.endsWith('.txt') || f.type === 'text/markdown' || f.type === 'text/plain');
+    if (mdFiles.length === 0) {
+      toast.error('No Markdown (.md) or text files found');
+      return;
+    }
+    let imported = 0;
+    for (const file of mdFiles) {
+      try {
+        const content = await file.text();
+        const title = file.name.replace(/\.(md|txt|markdown)$/i, '');
+        const res = await fetch('/api/notes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, content }),
+        });
+        if (res.ok) {
+          const newNote = await res.json();
+          setNotes(prev => [newNote, ...prev]);
+          if (imported === 0) setSelectedNote(newNote);
+          imported++;
+        }
+      } catch {
+        console.error('Failed to import', file.name);
+      }
+    }
+    if (imported > 0) {
+      toast.success(`Imported ${imported} file${imported > 1 ? 's' : ''}`);
+      fetchNotes();
+    }
   };
 
   if (loading) return <LoadingSkeleton />;
@@ -306,6 +433,34 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
 
       <UsageBanner used={usage.used} total={usage.total} />
 
+      {/* Command Palette */}
+      {showCommandPalette && (
+        <CommandPalette
+          notes={notes}
+          onSelect={(id) => { handleSelectNote(id); setShowCommandPalette(false); }}
+          onNew={() => { handleCreateNote(); setShowCommandPalette(false); }}
+          onClose={() => setShowCommandPalette(false)}
+        />
+      )}
+
+      {/* Note Templates */}
+      {showTemplates && (
+        <NoteTemplates
+          onSelect={handleCreateFromTemplate}
+          onClose={() => setShowTemplates(false)}
+        />
+      )}
+
+      {/* Hidden file input for markdown import */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".md,.txt,.markdown"
+        multiple
+        className="hidden"
+        onChange={(e) => { if (e.target.files) handleImportMarkdown(e.target.files); e.target.value = ''; }}
+      />
+
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
         <div className={`w-full md:w-72 flex-shrink-0 flex flex-col border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 ${selectedNote ? 'hidden md:flex' : 'flex'}`}>
@@ -318,7 +473,45 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
               onSearch={fetchNotes}
             />
           </div>
-          <div className="p-3 border-t border-gray-200 dark:border-gray-700 space-y-1">
+          {/* Drag-and-drop import zone */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDragOver(false);
+              if (e.dataTransfer.files.length > 0) handleImportMarkdown(e.dataTransfer.files);
+            }}
+            className={`mx-3 mb-2 rounded-lg border-2 border-dashed transition-all text-center py-2 text-xs cursor-pointer ${isDragOver
+              ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
+              : 'border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:border-gray-300 dark:hover:border-gray-600'
+              }`}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <FileUp className="h-3.5 w-3.5 mx-auto mb-0.5 opacity-60" />
+            Drop .md files to import
+          </div>
+
+          <div className="px-3 pb-3 border-t border-gray-200 dark:border-gray-700 pt-2 space-y-1">
+            {/* Template + Import row */}
+            <div className="flex gap-1">
+              <button
+                onClick={() => setShowTemplates(true)}
+                className="flex-1 py-2 px-2 text-xs bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                title="New from template"
+              >
+                <LayoutTemplate className="h-3.5 w-3.5" />
+                Templates
+              </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex-1 py-2 px-2 text-xs bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                title="Import .md files"
+              >
+                <FileUp className="h-3.5 w-3.5" />
+                Import .md
+              </button>
+            </div>
             <button
               onClick={() => router.push('/trash')}
               className="w-full py-2 px-3 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors flex items-center justify-center gap-2"
@@ -340,6 +533,7 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
               <Download className="h-4 w-4" />
               Export JSON
             </button>
+            <ThemeToggle />
             <button
               onClick={handleLogout}
               className="w-full py-2 px-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors flex items-center justify-center gap-2"
@@ -424,6 +618,48 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                   </button>
+                  {/* Share button */}
+                  <button
+                    onClick={handleShare}
+                    className={`p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${selectedNote.shareToken ? 'text-green-500' : 'text-gray-400'}`}
+                    title={selectedNote.shareToken ? 'Sharing on — click to copy link' : 'Share note'}
+                  >
+                    <Share2 className="h-4 w-4" />
+                  </button>
+                  {selectedNote.shareToken && (
+                    <button
+                      onClick={handleUnshare}
+                      className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-400 hover:text-red-400"
+                      title="Disable sharing"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                  {/* Duplicate note */}
+                  <button
+                    onClick={handleDuplicateNote}
+                    className="text-gray-400 hover:text-blue-500 transition-colors p-2"
+                    title="Duplicate Note"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </button>
+                  {/* Export as Markdown */}
+                  <button
+                    onClick={() => {
+                      const blob = new Blob([`# ${selectedNote.title}\n\n${selectedNote.content}`], { type: 'text/markdown' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `${selectedNote.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.md`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      toast.success('Exported as Markdown');
+                    }}
+                    className="text-gray-400 hover:text-blue-500 transition-colors p-2"
+                    title="Export as Markdown"
+                  >
+                    <FileDown className="h-4 w-4" />
+                  </button>
                   {/* Delete button */}
                   <button
                     onClick={() => handleDeleteNote(selectedNote.id)}
@@ -483,17 +719,73 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
                   onChange={handleUpdateNote}
                 />
               </div>
+
+              {/* Status Bar */}
+              <div className="px-4 py-1.5 border-t border-gray-100 dark:border-gray-800 flex items-center gap-4 text-[11px] text-gray-400 dark:text-gray-500 bg-gray-50/50 dark:bg-gray-900/30 select-none">
+                {(() => {
+                  const text = selectedNote.content.replace(/[#*`_~\[\]()>!|-]/g, '').trim();
+                  const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
+                  const chars = text.replace(/\s/g, '').length;
+                  const readingMins = Math.max(1, Math.ceil(words / 200));
+                  return (
+                    <>
+                      <span>{words.toLocaleString()} words</span>
+                      <span className="text-gray-200 dark:text-gray-700">·</span>
+                      <span>{chars.toLocaleString()} chars</span>
+                      <span className="text-gray-200 dark:text-gray-700">·</span>
+                      <span>~{readingMins} min read</span>
+                      <span className="ml-auto text-gray-300 dark:text-gray-600">
+                        Updated {new Date(selectedNote.updatedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </>
+                  );
+                })()}
+              </div>
             </div>
           ) : (
-            <div className="flex h-full items-center justify-center flex-col gap-3 text-gray-400">
-              <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                <svg className="w-8 h-8 text-gray-300 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="flex h-full items-center justify-center flex-col gap-6 text-gray-400 px-8">
+              <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-900/20 dark:to-indigo-900/20 flex items-center justify-center shadow-sm">
+                <svg className="w-10 h-10 text-blue-400 dark:text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               </div>
-              <div className="text-center">
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Select a note to start writing</p>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Press <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-[10px] font-mono">⌘N</kbd> to create a new note</p>
+              <div className="text-center max-w-xs">
+                <p className="text-base font-semibold text-gray-600 dark:text-gray-300">No note selected</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Choose a note from the sidebar or create a new one</p>
+              </div>
+              {/* Quick actions */}
+              <div className="flex flex-col gap-2 w-full max-w-xs">
+                <button
+                  onClick={handleCreateNote}
+                  className="flex items-center gap-3 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors text-sm font-medium"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  New Note
+                  <kbd className="ml-auto text-[10px] bg-blue-500 px-1.5 py-0.5 rounded font-mono opacity-80">⌘N</kbd>
+                </button>
+                <button
+                  onClick={() => setShowTemplates(true)}
+                  className="flex items-center gap-3 px-4 py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl transition-colors text-sm font-medium"
+                >
+                  <LayoutTemplate className="w-4 h-4" />
+                  New from Template
+                </button>
+                <button
+                  onClick={() => setShowCommandPalette(true)}
+                  className="flex items-center gap-3 px-4 py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl transition-colors text-sm font-medium"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  Search Notes
+                  <kbd className="ml-auto text-[10px] bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded font-mono">⌘P</kbd>
+                </button>
+              </div>
+              {/* Keyboard shortcuts hint */}
+              <div className="text-[11px] text-gray-300 dark:text-gray-600 text-center space-y-1">
+                <p><kbd className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">⌘K</kbd> search · <kbd className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">⌘P</kbd> palette · <kbd className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">⌘⌫</kbd> delete</p>
               </div>
             </div>
           )}

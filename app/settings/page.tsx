@@ -40,6 +40,9 @@ export default function SettingsPage() {
     const [securityStatus, setSecurityStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
     const [securityMessage, setSecurityMessage] = useState('');
 
+    // -- State: Stats --
+    const [stats, setStats] = useState<{ noteCount: number; totalWords: number; tagCount: number; sharedCount: number } | null>(null);
+
     // -- State: Data Management --
     const [isExporting, setIsExporting] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
@@ -54,8 +57,23 @@ export default function SettingsPage() {
         }
     };
 
+    const fetchStats = async () => {
+        try {
+            const res = await fetch('/api/notes');
+            if (res.ok) {
+                const notes = await res.json();
+                const totalWords = notes.reduce((sum: number, n: any) => sum + (n.wordCount || 0), 0);
+                const allTags = new Set<string>();
+                notes.forEach((n: any) => (n.tags || []).forEach((t: string) => allTags.add(t)));
+                const sharedCount = notes.filter((n: any) => n.shareToken).length;
+                setStats({ noteCount: notes.length, totalWords, tagCount: allTags.size, sharedCount });
+            }
+        } catch { /* ignore */ }
+    };
+
     useEffect(() => {
         fetchConfig();
+        fetchStats();
     }, []);
 
     // -- Database Wizard Actions --
@@ -407,6 +425,31 @@ export default function SettingsPage() {
                                 </div>
                             </div>
                         </section>
+
+                        {/* Stats Card */}
+                        {stats && (
+                            <section className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 shadow-sm">
+                                <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4">Your Notes</h2>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 text-center">
+                                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.noteCount}</div>
+                                        <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 uppercase tracking-wide">Notes</div>
+                                    </div>
+                                    <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-3 text-center">
+                                        <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.totalWords.toLocaleString()}</div>
+                                        <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 uppercase tracking-wide">Words</div>
+                                    </div>
+                                    <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 text-center">
+                                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.tagCount}</div>
+                                        <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 uppercase tracking-wide">Tags</div>
+                                    </div>
+                                    <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-3 text-center">
+                                        <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{stats.sharedCount}</div>
+                                        <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 uppercase tracking-wide">Shared</div>
+                                    </div>
+                                </div>
+                            </section>
+                        )}
 
                         <div className="p-5 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl border border-indigo-100 dark:border-indigo-800 text-xs text-indigo-700 dark:text-indigo-300 leading-relaxed space-y-2">
                             <div className="font-bold flex items-center gap-2">

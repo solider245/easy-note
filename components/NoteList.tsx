@@ -2,8 +2,8 @@
 
 import { NoteMeta } from '@/lib/types';
 import { formatDistanceToNow } from 'date-fns';
-import { Search, Plus, Pin, SortAsc, SortDesc, Clock } from 'lucide-react';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { Search, Plus, Pin, SortAsc, SortDesc, Clock, Tag, X } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import debounce from 'lodash.debounce';
 
 type SortKey = 'updatedAt' | 'createdAt' | 'title';
@@ -33,6 +33,8 @@ export default function NoteList({ notes, selectedId, onSelect, onNew, onSearch,
     const [sortKey, setSortKey] = useState<SortKey>('updatedAt');
     const [sortDir, setSortDir] = useState<SortDir>('desc');
     const [showSort, setShowSort] = useState(false);
+    const [activeTag, setActiveTag] = useState<string | null>(null);
+    const [showTags, setShowTags] = useState(false);
     const searchRef = useRef<HTMLInputElement>(null);
     const sortRef = useRef<HTMLDivElement>(null);
 
@@ -71,18 +73,36 @@ export default function NoteList({ notes, selectedId, onSelect, onNew, onSearch,
         return () => document.removeEventListener('mousedown', handler);
     }, []);
 
-    // Sort notes client-side (server already filters by query)
-    const sorted = [...notes].sort((a, b) => {
-        // Pinned always first
-        if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-        let cmp = 0;
-        if (sortKey === 'title') {
-            cmp = a.title.localeCompare(b.title);
-        } else {
-            cmp = (a[sortKey] as number) - (b[sortKey] as number);
+    // Aggregate all tags from notes
+    const allTags = useMemo(() => {
+        const tagCount: Record<string, number> = {};
+        for (const note of notes) {
+            for (const tag of note.tags || []) {
+                tagCount[tag] = (tagCount[tag] || 0) + 1;
+            }
         }
-        return sortDir === 'desc' ? -cmp : cmp;
-    });
+        return Object.entries(tagCount)
+            .sort((a, b) => b[1] - a[1])
+            .map(([name, count]) => ({ name, count }));
+    }, [notes]);
+
+    // Filter by active tag, then sort
+    const sorted = useMemo(() => {
+        let filtered = activeTag
+            ? notes.filter(n => (n.tags || []).includes(activeTag))
+            : notes;
+
+        return [...filtered].sort((a, b) => {
+            if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+            let cmp = 0;
+            if (sortKey === 'title') {
+                cmp = a.title.localeCompare(b.title);
+            } else {
+                cmp = (a[sortKey] as number) - (b[sortKey] as number);
+            }
+            return sortDir === 'desc' ? -cmp : cmp;
+        });
+    }, [notes, activeTag, sortKey, sortDir]);
 
     const sortLabels: Record<SortKey, string> = {
         updatedAt: 'Last Modified',
@@ -96,6 +116,16 @@ export default function NoteList({ notes, selectedId, onSelect, onNew, onSearch,
             <div className="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
                 <h2 className="text-lg font-bold text-gray-800 dark:text-white">Notes</h2>
                 <div className="flex gap-1.5 items-center">
+                    {/* Tags filter toggle */}
+                    {allTags.length > 0 && (
+                        <button
+                            onClick={() => setShowTags(v => !v)}
+                            className={`p-1.5 rounded-lg transition-colors ${showTags || activeTag ? 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                            title="Filter by tag"
+                        >
+                            <Tag className="h-4 w-4" />
+                        </button>
+                    )}
                     {/* Sort dropdown */}
                     <div className="relative" ref={sortRef}>
                         <button
@@ -139,6 +169,40 @@ export default function NoteList({ notes, selectedId, onSelect, onNew, onSearch,
                 </div>
             </div>
 
+            {/* Tag filter bar */}
+            {showTags && allTags.length > 0 && (
+                <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-900/50">
+                    <div className="flex flex-wrap gap-1.5">
+                        <button
+                            onClick={() => setActiveTag(null)}
+                            className={`text-[11px] px-2 py-0.5 rounded-full font-medium transition-colors ${!activeTag ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
+                        >
+                            All
+                        </button>
+                        {allTags.map(({ name, count }) => (
+                            <button
+                                key={name}
+                                onClick={() => setActiveTag(activeTag === name ? null : name)}
+                                className={`text-[11px] px-2 py-0.5 rounded-full font-medium transition-colors flex items-center gap-1 ${activeTag === name ? 'bg-blue-500 text-white' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50'}`}
+                            >
+                                #{name}
+                                <span className={`text-[9px] ${activeTag === name ? 'opacity-80' : 'opacity-60'}`}>{count}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Active tag indicator */}
+            {activeTag && !showTags && (
+                <div className="px-3 py-1.5 border-b border-blue-100 dark:border-blue-900/30 bg-blue-50/50 dark:bg-blue-900/10 flex items-center justify-between">
+                    <span className="text-[11px] text-blue-600 dark:text-blue-400 font-medium">#{activeTag}</span>
+                    <button onClick={() => setActiveTag(null)} className="text-blue-400 hover:text-blue-600 transition-colors">
+                        <X className="h-3 w-3" />
+                    </button>
+                </div>
+            )}
+
             {/* Search */}
             <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
                 <div className="relative group">
@@ -165,9 +229,12 @@ export default function NoteList({ notes, selectedId, onSelect, onNew, onSearch,
             </div>
 
             {/* Note count */}
-            {localQuery && (
+            {(localQuery || activeTag) && (
                 <div className="px-4 py-1.5 text-xs text-gray-500 dark:text-gray-400 bg-blue-50/50 dark:bg-blue-900/10 border-b border-gray-100 dark:border-gray-800">
-                    {sorted.length === 0 ? 'No results' : `${sorted.length} result${sorted.length !== 1 ? 's' : ''} for "${localQuery}"`}
+                    {sorted.length === 0
+                        ? 'No results'
+                        : `${sorted.length} note${sorted.length !== 1 ? 's' : ''}${localQuery ? ` for "${localQuery}"` : ''}${activeTag ? ` tagged #${activeTag}` : ''}`
+                    }
                 </div>
             )}
 
@@ -175,7 +242,7 @@ export default function NoteList({ notes, selectedId, onSelect, onNew, onSearch,
             <div className="flex-1 overflow-y-auto">
                 {sorted.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full py-16 text-center px-6">
-                        {localQuery ? (
+                        {localQuery || activeTag ? (
                             <>
                                 <Search className="h-10 w-10 text-gray-300 dark:text-gray-600 mb-3" />
                                 <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No notes match</p>
@@ -197,8 +264,8 @@ export default function NoteList({ notes, selectedId, onSelect, onNew, onSearch,
                             key={note.id}
                             onClick={() => onSelect(note.id)}
                             className={`px-4 py-3 cursor-pointer hover:bg-blue-50 dark:hover:bg-gray-700/60 transition-colors border-b border-gray-100 dark:border-gray-700/50 ${selectedId === note.id
-                                    ? 'bg-blue-50 dark:bg-blue-900/20 border-l-2 border-l-blue-500'
-                                    : 'border-l-2 border-l-transparent'
+                                ? 'bg-blue-50 dark:bg-blue-900/20 border-l-2 border-l-blue-500'
+                                : 'border-l-2 border-l-transparent'
                                 }`}
                         >
                             <div className="flex items-start justify-between gap-2">
@@ -213,6 +280,23 @@ export default function NoteList({ notes, selectedId, onSelect, onNew, onSearch,
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2 leading-relaxed">
                                     {highlight((note as any).preview, localQuery)}
                                 </p>
+                            )}
+                            {/* Tags */}
+                            {note.tags && note.tags.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-1.5">
+                                    {note.tags.slice(0, 3).map(tag => (
+                                        <span
+                                            key={tag}
+                                            onClick={(e) => { e.stopPropagation(); setActiveTag(tag); setShowTags(false); }}
+                                            className={`text-[10px] px-1.5 py-0.5 rounded-full cursor-pointer transition-colors ${activeTag === tag ? 'bg-blue-500 text-white' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50'}`}
+                                        >
+                                            #{tag}
+                                        </span>
+                                    ))}
+                                    {note.tags.length > 3 && (
+                                        <span className="text-[10px] text-gray-400">+{note.tags.length - 3}</span>
+                                    )}
+                                </div>
                             )}
                             <div className="flex items-center justify-between mt-1.5">
                                 <p className="text-[10px] text-gray-400 dark:text-gray-500">

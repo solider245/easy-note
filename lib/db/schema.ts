@@ -5,6 +5,7 @@ export const notes = sqliteTable('notes', {
     title: text('title').notNull().default('Untitled Note'),
     content: text('content').notNull().default(''),
     tags: text('tags').notNull().default('[]'), // JSON array of strings
+    shareToken: text('share_token'),             // null = not shared
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
     isPinned: integer('is_pinned', { mode: 'boolean' }).notNull().default(false),

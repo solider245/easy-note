@@ -4,10 +4,12 @@ import type { NextRequest } from 'next/server';
 export function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
-    // Always allow static assets, login page, and auth APIs
+    // Always allow static assets, login page, auth APIs, and public share pages
     if (
         pathname.startsWith('/login') ||
-        pathname.startsWith('/api/auth')
+        pathname.startsWith('/api/auth') ||
+        pathname.startsWith('/share/') ||
+        pathname.startsWith('/api/share/')
     ) {
         return NextResponse.next();
     }

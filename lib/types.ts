@@ -8,6 +8,7 @@ export interface NoteMeta {
   preview?: string;      // First ~120 chars of content (plain text)
   wordCount?: number;    // Approximate word count
   tags?: string[];       // Tag list
+  shareToken?: string | null; // Public share token (null = not shared)
 }
 
 export interface Note extends NoteMeta {

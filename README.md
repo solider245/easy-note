@@ -4,6 +4,7 @@ A premium, near-zero-config Markdown note app with a multi-tier storage architec
 
 ## ✨ Features
 
+### Core
 - **WYSIWYG Markdown Editor** — Powered by [Milkdown](https://milkdown.dev), with full rich-text editing.
 - **AI Writing Assistant** — Continue writing, summarize, or auto-generate titles via OpenAI.
 - **Pin Notes** — Keep important notes at the top of your list.
@@ -11,8 +12,55 @@ A premium, near-zero-config Markdown note app with a multi-tier storage architec
 - **Image Uploads** — Paste or drag-and-drop images (Vercel Blob or S3/R2).
 - **Export / Import** — One-click JSON backup and restore.
 - **In-App Settings** — Change password, configure AI & S3 — all from the UI.
-- **Dark Mode** — Automatic system-preference detection.
+- **Dark Mode** — Toggle or auto-detect system preference, persisted across sessions.
 - **Zero Config** — Works out of the box on Vercel with just a Blob store.
+
+### Search & Organization
+- **Instant Search** — Debounced full-text search across title, content, and tags (⌘K).
+- **Tags** — Add/remove tags on any note; filter the note list by tag.
+- **Sort** — Sort by last modified, created date, or title (asc/desc). Pinned notes always first.
+- **Content Preview** — See the first 120 characters of each note in the list.
+- **Word Count Badge** — Per-note word count shown in the list.
+
+### Keyboard Shortcuts
+| Shortcut | Action |
+|----------|--------|
+| `⌘N` | New note |
+| `⌘K` | Focus search |
+| `⌘P` | Open command palette |
+| `⌘⌫` | Delete selected note |
+| `ESC` | Close modals / cancel |
+
+### Command Palette (⌘P)
+- Fuzzy search across all notes by title, preview, and tags.
+- Arrow key navigation, Enter to select.
+- "New Note" action always available at the top.
+
+### Note Templates
+6 built-in templates accessible from the sidebar or empty state:
+- 📋 Meeting Notes
+- ✅ To-Do List
+- 📔 Daily Journal
+- 🚀 Project Brief
+- 🔬 Research Notes
+- 📄 Blank Note
+
+### Import & Export
+- **Import Markdown** — Drag & drop `.md` / `.txt` files onto the sidebar, or click "Import .md". Batch import supported.
+- **Export as Markdown** — Download any note as a `.md` file from the toolbar.
+- **Export All (JSON)** — Full backup of all notes.
+
+### Sharing
+- **Public Share Links** — Generate a shareable URL for any note (`/share/[token]`).
+- **Revoke Sharing** — Disable sharing at any time.
+- Public pages render full Markdown with tags and metadata.
+
+### Editor
+- **Status Bar** — Live word count, character count, estimated reading time, and last-updated timestamp.
+- **Auto-save** — Debounced 1-second auto-save with visual indicator.
+- **AI Title Suggestion** — Auto-suggests a title when a new note reaches 50+ characters.
+
+---
 
 ## 🚀 Quick Start
 
@@ -112,6 +160,7 @@ Supercharge your notes with AI powered by the **Vercel AI SDK**.
 - ✨ **Continue Writing** — Let AI finish your sentence.
 - 📝 **Summarize** — Get a concise summary of your selection.
 - 🏷️ **Suggest Title** — One-click AI title generation from content.
+- 🤖 **Auto-Title** — Automatically suggests a title when a new note reaches 50+ characters.
 
 ### Setup
 ```env
@@ -151,3 +200,29 @@ volumes:
 - Sensitive config values (API keys, passwords) are **AES-256-GCM encrypted** in the database.
 - File uploads are restricted to **images only** (JPEG, PNG, GIF, WebP, SVG, AVIF) with a **10MB size limit**.
 - Password changes require the current password for verification.
+- Share links use random 16-character tokens; revocable at any time.
+
+---
+
+## 📡 API Reference
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/notes` | List all notes (supports `?q=` search) |
+| POST | `/api/notes` | Create a note |
+| GET | `/api/notes/:id` | Get a note |
+| PUT | `/api/notes/:id` | Update a note (title, content, tags, isPinned, shareToken) |
+| DELETE | `/api/notes/:id` | Soft-delete (move to trash) |
+| POST | `/api/notes/:id/restore` | Restore from trash |
+| GET | `/api/notes/trash` | List trashed notes |
+| POST | `/api/notes/:id/share` | Enable sharing, returns `{shareToken, url}` |
+| DELETE | `/api/notes/:id/share` | Disable sharing |
+| GET | `/api/share/:token` | Public: get shared note by token |
+| GET | `/api/tags` | List all tags with counts |
+| GET | `/api/export` | Export all notes as JSON |
+| POST | `/api/import` | Import notes from JSON |
+| POST | `/api/upload` | Upload an image |
+| POST | `/api/ai/process` | AI: suggest-title, summarize |
+| POST | `/api/ai/complete` | AI: continue writing (streaming) |
+| GET | `/api/status` | Storage usage stats |
+| GET | `/api/status/config` | Active storage/DB config |

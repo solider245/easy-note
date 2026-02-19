@@ -1,7 +1,7 @@
 {
-    "name": "Easy Note",
+    "name": "Easy Note - Markdown Notes",
     "short_name": "Easy Note",
-    "description": "Sleek, Secure, and AI-Powered Minimalist Note Taking.",
+    "description": "A premium, near-zero-config Markdown note app with AI assistance, tags, templates, and secure sharing.",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#ffffff",
@@ -12,7 +12,70 @@
             "sizes": "1024x1024",
             "type": "image/png",
             "purpose": "any maskable"
+        },
+        {
+            "src": "/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
         }
     ],
-    "orientation": "portrait"
+    "shortcuts": [
+        {
+            "name": "New Note",
+            "short_name": "New",
+            "description": "Create a new note",
+            "url": "/?action=new",
+            "icons": [
+                {
+                    "src": "/icon.png",
+                    "sizes": "96x96"
+                }
+            ]
+        },
+        {
+            "name": "Search Notes",
+            "short_name": "Search",
+            "description": "Search across all notes",
+            "url": "/?action=search",
+            "icons": [
+                {
+                    "src": "/icon.png",
+                    "sizes": "96x96"
+                }
+            ]
+        },
+        {
+            "name": "Settings",
+            "short_name": "Settings",
+            "description": "Open app settings",
+            "url": "/settings",
+            "icons": [
+                {
+                    "src": "/icon.png",
+                    "sizes": "96x96"
+                }
+            ]
+        }
+    ],
+    "categories": [
+        "productivity",
+        "utilities"
+    ],
+    "orientation": "portrait-primary",
+    "scope": "/",
+    "lang": "en",
+    "dir": "ltr",
+    "prefer_related_applications": false,
+    "handle_links": "preferred",
+    "launch_handler": {
+        "client_mode": "navigate-existing"
+    },
+    "edge_side_panel": {
+        "preferred_width": 400
+    }
 }
