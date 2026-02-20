@@ -34,13 +34,14 @@ const NoteTemplates = dynamic(() => import('@/components/NoteTemplates'), {
   ssr: false
 });
 
-export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: boolean }) {
+export default function AppMain({ isUsingDefaultPass: initialIsUsingDefaultPass }: { isUsingDefaultPass: boolean }) {
   const [notes, setNotes] = useState<NoteMeta[]>([]);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [loading, setLoading] = useState(true);
   const [usage, setUsage] = useState({ used: 0, total: 250 * 1024 * 1024 });
   const [isSaving, setIsSaving] = useState(false);
   const [config, setConfig] = useState<any>(null);
+  const [isUsingDefaultPass, setIsUsingDefaultPass] = useState(initialIsUsingDefaultPass);
   const [tagInput, setTagInput] = useState('');
   const [showTagInput, setShowTagInput] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
@@ -68,6 +69,18 @@ export default function AppMain({ isUsingDefaultPass }: { isUsingDefaultPass: bo
   useEffect(() => {
     const init = async () => {
       try {
+        // Check actual password status from server
+        try {
+          const authRes = await fetch('/api/auth/status');
+          if (authRes.ok) {
+            const authData = await authRes.json();
+            // Update password warning status based on server response
+            setIsUsingDefaultPass(authData.isUsingDefaultPassword);
+          }
+        } catch (e) {
+          console.error('Failed to check auth status', e);
+        }
+
         // 第一步：优先加载笔记列表（对用户最重要）
         await fetchNotes();
         
