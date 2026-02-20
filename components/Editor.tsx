@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Milkdown, useEditor, MilkdownProvider } from '@milkdown/react';
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from '@milkdown/core';
 import { commonmark } from '@milkdown/preset-commonmark';
@@ -10,7 +10,6 @@ import { listener, listenerCtx } from '@milkdown/plugin-listener';
 import { useCompletion } from 'ai/react';
 import { Sparkles, Wand2, Type } from 'lucide-react';
 import { toast } from 'sonner';
-import { replaceAll } from '@milkdown/utils';
 
 interface EditorProps {
     content: string;
@@ -21,6 +20,9 @@ const EditorImpl: React.FC<EditorProps> = ({ content, onChange }) => {
     const [editorInstance, setEditorInstance] = useState<Editor | null>(null);
     const [lastCompletionLength, setLastCompletionLength] = useState(0);
     const [streamInsertPos, setStreamInsertPos] = useState<number | null>(null);
+    
+    // Track content changes for switching notes
+    const previousContentRef = useRef(content);
 
     const { complete, completion, isLoading } = useCompletion({
         api: '/api/ai/complete',
@@ -37,6 +39,7 @@ const EditorImpl: React.FC<EditorProps> = ({ content, onChange }) => {
         }
     });
 
+    // Initialize editor only once
     const editor = useEditor((root) => {
         const e = Editor.make()
             .config((ctx) => {
@@ -55,7 +58,22 @@ const EditorImpl: React.FC<EditorProps> = ({ content, onChange }) => {
 
         setEditorInstance(e);
         return e;
-    }, [content]);
+    }, []); // Remove content dependency - only init once
+
+    // Handle note switching (content changes from parent)
+    useEffect(() => {
+        if (editorInstance && content !== previousContentRef.current) {
+            // Content changed externally (note switch), update editor
+            editorInstance.action((ctx) => {
+                const editorView = ctx.get(editorViewCtx);
+                // Use commands to replace content without destroying editor
+                const { state, dispatch } = editorView;
+                const tr = state.tr.replaceWith(0, state.doc.content.size, state.schema.text(content));
+                dispatch(tr);
+            });
+            previousContentRef.current = content;
+        }
+    }, [content, editorInstance]);
 
     // Update editor with AI completion result (Streaming effect)
     useEffect(() => {
