@@ -89,12 +89,17 @@ Visit your deployed URL and start taking notes.
 
 ### Making Changes
 
-**Important:** On Vercel, configuration changes require redeployment.
+**Database configuration:** On Vercel, database configuration (URL, Token) cannot be changed after deployment. If you need to change databases, you must update environment variables and redeploy.
 
-1. Go to Vercel Dashboard → Your Project
-2. Settings → Environment Variables
-3. Update the variables
-4. Click "Redeploy"
+**Password:** You can change the admin password anytime after deployment:
+1. Login with your current password
+2. Go to Settings → Security
+3. Enter current password and new password
+4. Click "Update Password"
+
+The new password is saved to your database and takes effect immediately - no redeployment needed!
+
+**Other settings:** To change other configuration (AI keys, S3, etc.), you must update environment variables in Vercel Dashboard and redeploy.
 
 ---
 

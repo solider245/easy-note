@@ -37,9 +37,12 @@ Perfect for personal use. Zero maintenance.
 - `DATABASE_URL` = `postgresql://user:pass@host:5432/database`
 
 **Optional:**
-- `ADMIN_PASSWORD` = your login password
+- `ADMIN_PASSWORD` = your login password (default: admin123)
+  - ⚠️ **Security:** If not set, default password is `admin123`. You can change this after deployment in Settings → Security.
 
 Key names must be exactly as shown above. Then click "Deploy"!
+
+> 💡 **Note:** You can change the admin password anytime after deployment via Settings → Security. No need to redeploy!
 
 > 💡 **Tip:** You can use any PostgreSQL database - Supabase, AWS RDS, Google Cloud SQL, or your own server!
 

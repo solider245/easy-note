@@ -153,19 +153,21 @@ export class ConfigService {
     /**
      * Save a config value
      * 
-     * Vercel: Throws error (read-only)
-     * VPS: Saves to file (persists across restarts)
+     * Vercel: Most configs are read-only, but ADMIN_PASSWORD can be saved to DB
+     * VPS: Saves to file or DB (persists across restarts)
      */
     async set(key: string, value: string): Promise<void> {
-        // Cannot modify config on Vercel
-        if (isVercel()) {
+        // On Vercel, only ADMIN_PASSWORD can be modified (saved to DB)
+        // All other config changes require environment variables + redeploy
+        if (isVercel() && key !== 'ADMIN_PASSWORD') {
             throw new Error(
                 'Configuration cannot be modified at runtime on Vercel. ' +
                 'Please set environment variables in your Vercel project settings and redeploy.'
             );
         }
 
-        // Database connection strings go to File for persistence
+        // Database connection strings go to File for persistence (VPS only)
+        // On Vercel, this code won't be reached due to the check above
         if (key === 'DATABASE_URL' || key === 'TURSO_DATABASE_URL' || key === 'TURSO_AUTH_TOKEN') {
             this.fileConfig[key] = value;
             this.saveFileConfig();
