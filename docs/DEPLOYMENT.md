@@ -1,292 +1,223 @@
 # Deployment Guide
 
-Complete guide for deploying Easy Note to various platforms.
-
-## Table of Contents
-
-- [Vercel (Recommended)](#vercel-recommended)
-- [Turso Setup](#turso-setup)
-- [Supabase Setup](#supabase-setup)
-- [Docker](#docker)
-- [Troubleshooting](#troubleshooting)
+Easy Note supports two deployment modes:
+- **Vercel** (Easiest) — Zero-config serverless deployment
+- **VPS/Docker** (Flexible) — Full control with runtime configuration
 
 ---
 
-## Vercel (Recommended)
+## Choose Your Platform
 
-The easiest way to deploy Easy Note.
-
-### Step 1: Fork the Repository
-
-1. Go to https://github.com/yourusername/easy-note
-2. Click the "Fork" button
-3. Wait for the fork to complete
-
-### Step 2: Create Database
-
-Choose **Turso** (easier) or **Supabase** (more powerful).
-
-#### Turso Setup
-
-1. Install Turso CLI:
-   ```bash
-   brew install tursodatabase/tap/turso
-   ```
-
-2. Login and create database:
-   ```bash
-   turso auth login
-   turso db create my-notes
-   ```
-
-3. Get connection details:
-   ```bash
-   # Get database URL
-   turso db show my-notes
-   # Output: libsql://my-notes-username.turso.io
-   
-   # Create auth token
-   turso db tokens create my-notes
-   # Output: eyJhbGciOiJFZERTQSIs...
-   ```
-
-4. Save these values for Step 3.
-
-#### Supabase Setup
-
-1. Go to [supabase.com](https://supabase.com) and sign up
-2. Create a new project
-3. Wait for the project to be ready
-4. Go to Settings → Database
-5. Under "Connection string", select "URI"
-6. Copy the connection string (replace `[YOUR-PASSWORD]` with your actual password)
-
-### Step 3: Deploy to Vercel
-
-#### Option A: Vercel Web UI
-
-1. Go to [vercel.com](https://vercel.com)
-2. Click "Add New Project"
-3. Import your forked GitHub repository
-4. In the "Configure Project" step:
-   - Framework Preset: Next.js
-   - Add Environment Variables:
-
-   **For Turso:**
-   ```
-   TURSO_DATABASE_URL=libsql://your-db.turso.io
-   TURSO_AUTH_TOKEN=your-token-here
-   ```
-
-   **For Supabase:**
-   ```
-   DATABASE_URL=postgresql://postgres.your-project:password@aws-0-region.pooler.supabase.com:6543/postgres
-   ```
-
-   **Optional:**
-   ```
-   ADMIN_PASSWORD=your-secure-password
-   ```
-
-5. Click "Deploy"
-6. Wait for deployment to complete (2-3 minutes)
-
-#### Option B: Vercel CLI
-
-```bash
-# Install Vercel CLI
-npm i -g vercel
-
-# Login
-vercel login
-
-# Deploy from project directory
-vercel
-
-# Set environment variables
-vercel env add TURSO_DATABASE_URL
-vercel env add TURSO_AUTH_TOKEN
-
-# Redeploy with new env vars
-vercel --prod
-```
-
-### Step 4: Verify Deployment
-
-1. Visit your deployed URL (e.g., `https://easy-note-xyz.vercel.app`)
-2. You should see the login page
-3. Default password: `admin123` (change this in settings!)
+| Feature | Vercel | VPS |
+|---------|--------|-----|
+| **Setup Time** | 3 minutes | 10 minutes |
+| **Configuration** | Environment variables | Env vars, UI, or file |
+| **Runtime Changes** | Requires redeploy | Hot reload supported |
+| **Maintenance** | Zero | Low |
+| **Best For** | Personal use | Power users, teams |
 
 ---
 
-## Docker
-
-Deploy Easy Note using Docker for self-hosting.
+## Vercel Deployment (Recommended for Beginners)
 
 ### Prerequisites
 
-- Docker and Docker Compose installed
-- Database (Turso, Supabase, or local PostgreSQL)
+- Turso account (free tier available)
+- GitHub account
+- Vercel account
 
-### Using Docker Compose
+### Step 1: Get Turso Credentials
 
-Create `docker-compose.yml`:
+```bash
+# Install Turso CLI
+brew install tursodatabase/tap/turso
 
-```yaml
+# Login
+turso auth login
+
+# Create database
+turso db create my-notes
+
+# Get credentials
+turso db show my-notes
+turso db tokens create my-notes
+```
+
+### Step 2: Deploy
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yourusername/easy-note)
+
+During deployment:
+1. Connect your GitHub account
+2. Fill in environment variables:
+   - `TURSO_DATABASE_URL` — from `turso db show`
+   - `TURSO_AUTH_TOKEN` — from `turso db tokens create`
+   - `ADMIN_PASSWORD` — your login password (optional)
+3. Click "Deploy"
+
+### Step 3: Done!
+
+Visit your deployed URL and start taking notes.
+
+### Making Changes
+
+**Important:** On Vercel, configuration changes require redeployment.
+
+1. Go to Vercel Dashboard → Your Project
+2. Settings → Environment Variables
+3. Update the variables
+4. Click "Redeploy"
+
+---
+
+## VPS Deployment (Recommended for Power Users)
+
+See [VPS.md](./VPS.md) for detailed VPS/Docker instructions.
+
+### Quick Start
+
+```bash
+# Create docker-compose.yml
+cat > docker-compose.yml << 'EOF'
 version: '3.8'
-
 services:
   app:
     image: yourusername/easy-note:latest
     ports:
       - "3000:3000"
-    environment:
-      - TURSO_DATABASE_URL=${TURSO_DATABASE_URL}
-      - TURSO_AUTH_TOKEN=${TURSO_AUTH_TOKEN}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
     volumes:
       - ./data:/app/data
+    environment:
+      - NODE_ENV=production
     restart: unless-stopped
+EOF
+
+# Start
+docker-compose up -d
+
+# Configure via web UI
+# Open http://your-server:3000/settings
 ```
 
-Create `.env` file:
+### VPS Advantages
 
-```bash
+- **Runtime configuration** — Change settings without redeploying
+- **Hot reload** — Apply changes immediately
+- **File-based config** — Store config in version control
+- **Full control** — Customize everything
+
+---
+
+## Database Options
+
+### Turso (Recommended)
+
+```
 TURSO_DATABASE_URL=libsql://your-db.turso.io
 TURSO_AUTH_TOKEN=your-token
-ADMIN_PASSWORD=your-secure-password
 ```
 
-Run:
+**Pros:** Edge database, generous free tier, SQLite compatible
 
-```bash
-docker-compose up -d
+### Supabase
+
+```
+DATABASE_URL=postgresql://user:pass@host.supabase.co:5432/postgres
 ```
 
-### Building from Source
+**Pros:** Full PostgreSQL, great dashboard, generous free tier
 
-```bash
-# Clone repository
-git clone https://github.com/yourusername/easy-note.git
-cd easy-note
+### Self-hosted SQLite (VPS only)
 
-# Build Docker image
-docker build -t easy-note .
-
-# Run container
-docker run -d \
-  -p 3000:3000 \
-  -e TURSO_DATABASE_URL=libsql://your-db.turso.io \
-  -e TURSO_AUTH_TOKEN=your-token \
-  -e ADMIN_PASSWORD=your-password \
-  -v $(pwd)/data:/app/data \
-  --name easy-note \
-  easy-note
 ```
+TURSO_DATABASE_URL=file:/app/data/notes.db
+```
+
+**Pros:** Zero external dependencies, works offline
 
 ---
 
-## Troubleshooting
-
-### Database Connection Issues
-
-**Problem:** "Failed to connect to database" error
-
-**Solutions:**
-
-1. **Verify environment variables are set:**
-   ```bash
-   # In Vercel dashboard, check:
-   # Project Settings → Environment Variables
-   ```
-
-2. **Test database connection locally:**
-   ```bash
-   # For Turso
-   turso db shell my-notes
-   
-   # Should open SQLite prompt
-   ```
-
-3. **Check token permissions:**
-   ```bash
-   # Recreate token if needed
-   turso db tokens create my-notes
-   ```
-
-### Build Failures
-
-**Problem:** Build fails on Vercel
-
-**Solutions:**
-
-1. Check Node.js version (requires 18+)
-2. Clear build cache and redeploy
-3. Check Vercel build logs for specific errors
-
-### Memory/Demo Mode
-
-**Problem:** App runs in "Demo Mode" with memory storage
-
-**Cause:** Database environment variables not configured
-
-**Solution:** 
-- Add `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` to environment variables
-- Redeploy the application
-
-### Data Loss Concerns
-
-**Problem:** Worried about losing notes
-
-**Solution:**
-1. Regularly export backups:
-   - Settings → Data Management → Export Backup
-2. Store backups in safe location
-3. Your data is in your database - we don't have access
-
----
-
-## Environment Variables Reference
+## Environment Variables
 
 ### Required
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `TURSO_DATABASE_URL` | Turso database URL | `libsql://my-db.turso.io` |
-| `TURSO_AUTH_TOKEN` | Turso auth token | `eyJhbGciOi...` |
+| Variable | Description | Platforms |
+|----------|-------------|-----------|
+| `TURSO_DATABASE_URL` | Turso connection URL | All |
+| `TURSO_AUTH_TOKEN` | Turso auth token | All |
 | **OR** | | |
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://...` |
+| `DATABASE_URL` | PostgreSQL connection string | All |
 
 ### Optional
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `ADMIN_PASSWORD` | Login password | `admin123` |
-| `OPENAI_API_KEY` | Enable AI features | - |
-| `S3_ENDPOINT` | External storage endpoint | - |
-| `BLOB_READ_WRITE_TOKEN` | Use Vercel Blob instead of DB | - |
+| `OPENAI_API_KEY` | Enable AI features | — |
+| `S3_ENDPOINT` | External storage | — |
+
+### Platform-Specific Behavior
+
+**Vercel:**
+- Env vars are read-only
+- Changes require redeployment
+- Set via Vercel Dashboard
+
+**VPS:**
+- Env vars can be overridden via UI
+- Changes saved to `data/local-config.json`
+- File config takes precedence
+
+---
+
+## Troubleshooting
+
+### "Memory storage not available in production"
+
+You haven't configured a database. Check:
+1. Environment variables are set correctly
+2. Database URL is valid
+3. Redeploy after setting env vars (Vercel)
+
+### "Failed to connect to database"
+
+1. Verify database credentials
+2. Check network connectivity
+3. Ensure database allows your IP
+
+### Configuration changes not applying
+
+**Vercel:** You must redeploy after changing env vars.
+
+**VPS:** Try restarting the container:
+```bash
+docker-compose restart
+```
+
+---
+
+## Migration Guide
+
+### Vercel → VPS
+
+1. Export data: Settings → Data Management → Export
+2. Deploy to VPS (see VPS.md)
+3. Import data: Settings → Data Management → Import
+
+### VPS → Vercel
+
+1. Export data from VPS
+2. Deploy to Vercel
+3. Import data
 
 ---
 
 ## Next Steps
 
-After deployment:
-
-1. **Change default password:**
-   - Go to Settings → Security
-   - Update from `admin123` to a secure password
-
-2. **Enable advanced features (optional):**
-   - AI writing assistant
-   - S3 media storage
-   - Note sharing
-
-3. **Set up backups:**
-   - Export data regularly
-   - Consider database-level backups
+- **Vercel users:** See [README.md](../README.md) for usage tips
+- **VPS users:** See [VPS.md](./VPS.md) for advanced configuration
+- **Advanced features:** See [ADVANCED.md](./ADVANCED.md)
 
 ---
 
-**Need help?** 
-- Open an issue on GitHub
-- Check the main README for usage tips
+**Need help?** [Open an issue](https://github.com/yourusername/easy-note/issues)
