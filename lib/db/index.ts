@@ -8,18 +8,27 @@ let _db: AnyDrizzle | null = null;
 let _initialized = false;
 
 export async function getDb(): Promise<AnyDrizzle> {
-    if (_db && _initialized) return _db;
+    if (_db && _initialized) {
+        console.log('[DB] Returning cached database instance');
+        return _db;
+    }
 
+    console.log('[DB] Initializing database connection...');
     const { configService } = await import('../config/config-service');
     const url = await configService.get('DATABASE_URL') || await configService.get('TURSO_DATABASE_URL');
 
+    console.log('[DB] Database URL found:', url ? 'Yes' : 'No');
+    
     if (!url) {
-        throw new Error('No database URL found');
+        throw new Error('No database URL found. Please configure DATABASE_URL or TURSO_DATABASE_URL environment variable.');
     }
+    
     const isSQLite = url.startsWith('libsql://') || url.startsWith('file:');
+    console.log('[DB] Database type:', isSQLite ? 'SQLite' : 'PostgreSQL');
 
     if (!_db) {
         if (isSQLite) {
+            console.log('[DB] Creating SQLite connection...');
             // Ensure directory exists for file: URLs
             if (url.startsWith('file:')) {
                 try {
@@ -42,19 +51,26 @@ export async function getDb(): Promise<AnyDrizzle> {
                 authToken: await configService.get('DATABASE_AUTH_TOKEN') || await configService.get('TURSO_AUTH_TOKEN'),
             });
             _db = drizzle(client);
+            console.log('[DB] SQLite connection created');
         } else {
+            console.log('[DB] Creating PostgreSQL connection...');
             const postgres = (await import('postgres')).default;
             const { drizzle } = await import('drizzle-orm/postgres-js');
+            console.log('[DB] Connecting to PostgreSQL:', url.substring(0, url.indexOf('@') + 1) + '***');
             const client = postgres(url);
             _db = drizzle(client);
+            console.log('[DB] PostgreSQL connection created');
         }
     }
 
     if (!_initialized) {
+        console.log('[DB] Initializing database schema...');
         await initializeDb(_db, isSQLite);
         _initialized = true;
+        console.log('[DB] Database initialization complete');
     }
 
+    console.log('[DB] Database ready');
     return _db;
 }
 

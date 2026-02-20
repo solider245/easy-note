@@ -9,12 +9,18 @@ let _storageType: 'database' | 'blob' | 'memory' | null = null;
  * Determines storage type based on environment variables and file config
  */
 export async function getStorage(): Promise<StorageAdapter> {
-    if (_instance) return _instance;
+    if (_instance) {
+        console.log('[Storage] Returning cached instance');
+        return _instance;
+    }
 
+    console.log('[Storage] Initializing storage...');
     const storageType = await getStorageType();
+    console.log('[Storage] Storage type:', storageType);
 
     switch (storageType) {
         case 'database':
+            console.log('[Storage] Using DbAdapter');
             const { DbAdapter } = await import('./db-adapter');
             _instance = new DbAdapter();
             break;
