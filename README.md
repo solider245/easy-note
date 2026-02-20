@@ -27,12 +27,19 @@ Perfect for personal use. Zero maintenance.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yourusername/easy-note)
 
-**Configuration:**
-1. Get your Turso credentials (see below)
-2. Paste into Vercel deployment form
-3. Deploy!
+**⚠️ Important:** Fill in environment variables **during deployment**, not after:
 
-**Note:** Configuration changes require redeployment on Vercel.
+**Turso (SQLite):**
+- `TURSO_DATABASE_URL` = `libsql://your-db.turso.io`
+- `TURSO_AUTH_TOKEN` = `eyJhbGci...` (your token)
+
+**Supabase (PostgreSQL):**
+- `DATABASE_URL` = `postgresql://user:pass@host.supabase.co:5432/postgres`
+
+**Optional:**
+- `ADMIN_PASSWORD` = your login password
+
+Key names must be exactly as shown above. Then click "Deploy"!
 
 ### Option 2: VPS/Docker (Flexible)
 

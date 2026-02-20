@@ -43,17 +43,38 @@ turso db show my-notes
 turso db tokens create my-notes
 ```
 
-### Step 2: Deploy
+### Step 2: Deploy (⚠️ Read Carefully)
+
+**Important:** You must fill in environment variables **during deployment**, not after. Vercel reads these values at build time.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yourusername/easy-note)
 
-During deployment:
-1. Connect your GitHub account
-2. Fill in environment variables:
-   - `TURSO_DATABASE_URL` — from `turso db show`
-   - `TURSO_AUTH_TOKEN` — from `turso db tokens create`
-   - `ADMIN_PASSWORD` — your login password (optional)
-3. Click "Deploy"
+During deployment, you will see a form for "Environment Variables". Fill in exactly these key names:
+
+**Option A: Turso (SQLite)**
+```
+Key: TURSO_DATABASE_URL
+Value: libsql://your-db.turso.io
+
+Key: TURSO_AUTH_TOKEN
+Value: eyJhbGciOiJFZERTQSIs... (your token)
+```
+
+**Option B: Supabase (PostgreSQL)**
+```
+Key: DATABASE_URL
+Value: postgresql://user:password@host.supabase.co:5432/postgres
+```
+
+**Optional:**
+```
+Key: ADMIN_PASSWORD
+Value: your-secure-password
+```
+
+⚠️ **Key names must be exactly as shown above** — they are hardcoded in the application.
+
+Then click "Deploy"
 
 ### Step 3: Done!
 
