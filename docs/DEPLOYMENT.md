@@ -191,13 +191,41 @@ TURSO_DATABASE_URL=file:/app/data/notes.db
 | **OR** | | |
 | `DATABASE_URL` | PostgreSQL connection string | All |
 
-### Optional
+### Optional - AI Features
+
+Enable AI-powered writing assistance:
+
+```bash
+# Required for AI
+OPENAI_API_KEY=sk-your-openai-api-key
+
+# Optional (defaults shown)
+OPENAI_MODEL=gpt-4o-mini    # Or gpt-4, gpt-4o, etc.
+```
+
+### Optional - S3 Storage
+
+Store media files on S3-compatible storage (AWS S3, Cloudflare R2, MinIO, etc.):
+
+```bash
+# Required for S3
+S3_ENDPOINT=https://your-endpoint.com
+S3_BUCKET=your-bucket-name
+S3_ACCESS_KEY_ID=your-access-key
+S3_SECRET_ACCESS_KEY=your-secret-key
+
+# Optional (defaults shown)
+S3_REGION=auto              # Or specific region like us-east-1
+S3_PUBLIC_URL=              # Custom CDN URL (optional)
+```
+
+### Optional - Other Settings
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `ADMIN_PASSWORD` | Login password | `admin123` |
-| `OPENAI_API_KEY` | Enable AI features | — |
-| `S3_ENDPOINT` | External storage | — |
+| `ENABLE_SHARING` | Enable public note sharing | `false` |
+| `BLOB_READ_WRITE_TOKEN` | Use Vercel Blob instead of DB | — |
 
 ### Platform-Specific Behavior
 

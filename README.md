@@ -111,21 +111,46 @@ See [docs/VPS.md](./docs/VPS.md) for configuration options.
 
 ## ⚙️ Advanced Features (Optional)
 
-These features can be enabled via environment variables:
+Enable these features by adding environment variables during deployment:
 
 ### AI Writing Assistant
-```
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
+
+Add these to enable AI-powered writing assistance:
+
+```bash
+OPENAI_API_KEY=sk-your-openai-api-key-here
+OPENAI_MODEL=gpt-4o-mini  # Optional, defaults to gpt-4o-mini
 ```
 
+**Features enabled:**
+- Continue writing (⌘⇧A)
+- Summarize content
+- Auto-generate note titles
+
 ### External Storage (S3)
+
+Store images and media on S3-compatible storage:
+
+```bash
+# Required
+S3_ENDPOINT=https://your-r2-or-s3-endpoint.com
+S3_BUCKET=your-bucket-name
+S3_ACCESS_KEY_ID=your-access-key
+S3_SECRET_ACCESS_KEY=your-secret-key
+
+# Optional
+S3_REGION=auto              # Or specific region like us-east-1
+S3_PUBLIC_URL=              # Custom CDN domain (optional)
 ```
-S3_ENDPOINT=https://...
-S3_REGION=auto
-S3_BUCKET=my-notes
-S3_ACCESS_KEY_ID=...
-S3_SECRET_ACCESS_KEY=...
+
+**Supported providers:** AWS S3, Cloudflare R2, MinIO, Wasabi, etc.
+
+### Note Sharing
+
+Enable public note sharing links:
+
+```bash
+ENABLE_SHARING=true
 ```
 
 ---
