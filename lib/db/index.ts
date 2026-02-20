@@ -85,6 +85,7 @@ async function initializeDb(db: AnyDrizzle, isSQLite: boolean) {
                     title TEXT NOT NULL DEFAULT 'Untitled Note',
                     content TEXT NOT NULL DEFAULT '',
                     tags TEXT NOT NULL DEFAULT '[]',
+                    share_token TEXT,
                     created_at INTEGER NOT NULL,
                     updated_at INTEGER NOT NULL,
                     is_pinned INTEGER NOT NULL DEFAULT 0,
@@ -92,6 +93,7 @@ async function initializeDb(db: AnyDrizzle, isSQLite: boolean) {
                 )
             `);
             // Migrations for existing tables
+            try { await client.execute(`ALTER TABLE notes ADD COLUMN share_token TEXT`); } catch (e) { }
             try { await client.execute(`ALTER TABLE notes ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0`); } catch (e) { }
             try { await client.execute(`ALTER TABLE notes ADD COLUMN deleted_at INTEGER`); } catch (e) { }
             await client.execute(`
@@ -108,6 +110,7 @@ async function initializeDb(db: AnyDrizzle, isSQLite: boolean) {
                     title TEXT NOT NULL DEFAULT 'Untitled Note',
                     content TEXT NOT NULL DEFAULT '',
                     tags TEXT NOT NULL DEFAULT '[]',
+                    share_token TEXT,
                     created_at BIGINT NOT NULL,
                     updated_at BIGINT NOT NULL,
                     is_pinned TEXT NOT NULL DEFAULT 'false',
@@ -115,6 +118,7 @@ async function initializeDb(db: AnyDrizzle, isSQLite: boolean) {
                 )
             `);
             // Migrations for existing tables
+            try { await postgresDb.execute(drizzleSql`ALTER TABLE notes ADD COLUMN IF NOT EXISTS share_token TEXT`); } catch (e) { }
             try { await postgresDb.execute(drizzleSql`ALTER TABLE notes ADD COLUMN IF NOT EXISTS is_pinned TEXT NOT NULL DEFAULT 'false'`); } catch (e) { }
             try { await postgresDb.execute(drizzleSql`ALTER TABLE notes ADD COLUMN IF NOT EXISTS deleted_at BIGINT`); } catch (e) { }
             await postgresDb.execute(drizzleSql`
