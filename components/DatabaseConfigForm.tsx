@@ -1,17 +1,20 @@
 'use client';
 
-import { useState } from 'react';
-import { Database, Globe, Server, Check, AlertCircle, Loader2, ExternalLink, Copy, CheckCheck } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Database, Globe, Server, Check, AlertCircle, Loader2, ExternalLink, Copy, CheckCheck, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Provider = 'turso' | 'supabase';
 type SupabaseMode = 'connectionString' | 'manual';
+type DeploymentType = 'vercel' | 'vps' | 'development' | null;
 
 interface DatabaseConfigFormProps {
     onClose?: () => void;
+    onConnected?: () => void;
 }
 
-export default function DatabaseConfigForm({ onClose }: DatabaseConfigFormProps) {
+export default function DatabaseConfigForm({ onClose, onConnected }: DatabaseConfigFormProps) {
+    const [deploymentType, setDeploymentType] = useState<DeploymentType>(null);
     const [provider, setProvider] = useState<Provider>('turso');
     const [supabaseMode, setSupabaseMode] = useState<SupabaseMode>('connectionString');
     const [config, setConfig] = useState({
@@ -26,8 +29,26 @@ export default function DatabaseConfigForm({ onClose }: DatabaseConfigFormProps)
         ssl: true,
     });
     const [isTesting, setIsTesting] = useState(false);
-    const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+    const [testResult, setTestResult] = useState<{ success: boolean; message: string; vercelMode?: boolean; envVars?: string; hotReloaded?: boolean } | null>(null);
     const [copied, setCopied] = useState(false);
+
+    // Detect deployment type on mount
+    useEffect(() => {
+        // Check if running on Vercel by looking for Vercel-specific env vars
+        // In browser, we can infer from window.location or API
+        const checkDeployment = async () => {
+            try {
+                const res = await fetch('/api/database/status');
+                const data = await res.json();
+                // Infer from response - if we can detect somehow
+                // For now, we'll use a simple heuristic or API endpoint
+                setDeploymentType('vercel'); // Default assumption, will be overridden by actual behavior
+            } catch {
+                setDeploymentType('vps');
+            }
+        };
+        checkDeployment();
+    }, []);
 
     const handleTest = async () => {
         setIsTesting(true);
@@ -52,7 +73,7 @@ export default function DatabaseConfigForm({ onClose }: DatabaseConfigFormProps)
                 }
             }
 
-            const res = await fetch('/api/database/test', {
+            const res = await fetch('/api/database/connect', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
@@ -62,19 +83,28 @@ export default function DatabaseConfigForm({ onClose }: DatabaseConfigFormProps)
             setTestResult(result);
 
             if (result.success) {
-                toast.success('Connection test successful!');
+                if (result.vercelMode) {
+                    toast.success('Connection test passed! Copy the environment variables below.');
+                } else if (result.hotReloaded) {
+                    toast.success('Database connected and configuration saved!');
+                    onConnected?.();
+                } else {
+                    toast.success('Connection test successful');
+                }
             } else {
-                toast.error('Connection test failed: ' + result.message);
+                toast.error('Connection failed: ' + result.message);
             }
         } catch (error) {
             toast.error('Failed to test connection');
-            setTestResult({ success: false, message: 'Failed to test connection' });
+            setTestResult({ success: false, message: 'Network error' });
         } finally {
             setIsTesting(false);
         }
     };
 
     const getEnvVariables = () => {
+        if (testResult?.envVars) return testResult.envVars;
+        
         if (provider === 'turso') {
             return `TURSO_DATABASE_URL=${config.url}
 TURSO_AUTH_TOKEN=${config.token}`;
@@ -96,8 +126,41 @@ TURSO_AUTH_TOKEN=${config.token}`;
         setTimeout(() => setCopied(false), 2000);
     };
 
+    const isVercelMode = testResult?.vercelMode;
+    const isVpsMode = testResult?.hotReloaded || (!isVercelMode && testResult?.success);
+
     return (
         <div className="space-y-6">
+            {/* Deployment Mode Indicator */}
+            {testResult?.vercelMode && (
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-start gap-3">
+                        <ExternalLink className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                        <div>
+                            <h4 className="font-semibold text-blue-900 dark:text-blue-300">Vercel Deployment Detected</h4>
+                            <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
+                                On Vercel, configuration is managed via environment variables. 
+                                Test your connection below, then copy the environment variables to your Vercel project.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {testResult?.hotReloaded && (
+                <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
+                    <div className="flex items-start gap-3">
+                        <RefreshCw className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                        <div>
+                            <h4 className="font-semibold text-green-900 dark:text-green-300">Configuration Applied</h4>
+                            <p className="text-sm text-green-700 dark:text-green-400 mt-1">
+                                Your database configuration has been saved and applied. No restart needed!
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Provider Selection */}
             <div className="grid grid-cols-2 gap-4">
                 <button
@@ -141,7 +204,7 @@ TURSO_AUTH_TOKEN=${config.token}`;
             <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-5 space-y-4">
                 <h3 className="font-medium flex items-center gap-2">
                     <Database className="w-4 h-4" />
-                    Test Your Configuration
+                    {testResult?.vercelMode ? 'Test Connection' : 'Configure Database'}
                 </h3>
 
                 {provider === 'turso' ? (
@@ -266,13 +329,13 @@ TURSO_AUTH_TOKEN=${config.token}`;
                     ) : (
                         <>
                             <Check className="w-4 h-4" />
-                            Test Connection
+                            {testResult?.vercelMode ? 'Test Again' : 'Test & Save Connection'}
                         </>
                     )}
                 </button>
 
                 {/* Test Result */}
-                {testResult && (
+                {testResult && !testResult.vercelMode && !testResult.hotReloaded && (
                     <div className={`p-3 rounded-lg flex items-center gap-2 ${
                         testResult.success 
                             ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' 
@@ -284,15 +347,15 @@ TURSO_AUTH_TOKEN=${config.token}`;
                 )}
             </div>
 
-            {/* Environment Variables Section */}
-            {testResult?.success && (
+            {/* Vercel Environment Variables Section */}
+            {isVercelMode && (
                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-5 space-y-3">
                     <h3 className="font-medium text-blue-900 dark:text-blue-300 flex items-center gap-2">
                         <CheckCheck className="w-4 h-4" />
-                        Configuration Verified
+                        Environment Variables
                     </h3>
                     <p className="text-sm text-blue-700 dark:text-blue-400">
-                        Copy these environment variables to your Vercel project:
+                        Add these variables to your Vercel project and redeploy:
                     </p>
                     <div className="relative">
                         <pre className="bg-gray-900 text-gray-100 p-3 rounded-lg text-sm font-mono overflow-x-auto">
@@ -322,15 +385,23 @@ TURSO_AUTH_TOKEN=${config.token}`;
 
             {/* Instructions */}
             <div className="bg-gray-100 dark:bg-gray-800 rounded-xl p-4 text-sm text-gray-600 dark:text-gray-400 space-y-2">
-                <p className="font-medium text-gray-900 dark:text-gray-200">How to configure:</p>
-                <ol className="list-decimal list-inside space-y-1">
-                    <li>Fill in your database credentials above</li>
-                    <li>Click "Test Connection" to verify</li>
-                    <li>Copy the environment variables</li>
-                    <li>Go to Vercel Dashboard → Your Project → Settings → Environment Variables</li>
-                    <li>Paste the variables and save</li>
-                    <li>Redeploy your project</li>
-                </ol>
+                <p className="font-medium text-gray-900 dark:text-gray-200">
+                    {isVercelMode ? 'Next Steps:' : 'Instructions:'}
+                </p>
+                {isVercelMode ? (
+                    <ol className="list-decimal list-inside space-y-1">
+                        <li>Copy the environment variables above</li>
+                        <li>Go to Vercel Dashboard → Your Project → Settings → Environment Variables</li>
+                        <li>Add the variables and save</li>
+                        <li>Redeploy your project (important!)</li>
+                    </ol>
+                ) : (
+                    <ol className="list-decimal list-inside space-y-1">
+                        <li>Fill in your database credentials</li>
+                        <li>Click "Test & Save Connection" to verify</li>
+                        <li>Configuration will be saved automatically</li>
+                    </ol>
+                )}
             </div>
 
             {/* Close Button */}

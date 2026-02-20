@@ -1,6 +1,7 @@
 import { getDb } from '../db';
 import { eq } from 'drizzle-orm';
 import { encrypt, decrypt } from '../utils/encryption';
+import { isVercel, canModifyConfig } from '../utils/environment';
 import fs from 'fs';
 import path from 'path';
 
@@ -36,12 +37,19 @@ export class ConfigService {
     }
 
     private saveFileConfig() {
+        // Only save to file on VPS/development
+        if (isVercel()) {
+            console.warn('Cannot save config to file on Vercel. Use environment variables instead.');
+            return;
+        }
+
         try {
             const dir = path.dirname(CONFIG_FILE_PATH);
             if (!fs.existsSync(dir)) {
                 fs.mkdirSync(dir, { recursive: true });
             }
             fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(this.fileConfig, null, 2));
+            console.log('Saved local-config.json');
         } catch (e) {
             console.error('Failed to save local-config.json:', e);
         }
@@ -55,21 +63,24 @@ export class ConfigService {
     }
 
     /**
-     * Get a config value.
-     * Priority: Env > File > DB (except ADMIN_PASSWORD: DB > Env)
+     * Get a config value
+     * 
+     * Vercel: Env only (read-only)
+     * VPS: File > Env > DB (File takes precedence for user overrides)
+     * 
+     * Exception: ADMIN_PASSWORD always uses DB > Env (for password changes)
      */
     async get(key: string): Promise<string | undefined> {
         // Check cache first
         if (this.cache.has(key)) return this.cache.get(key);
 
-        // Special case: ADMIN_PASSWORD — DB takes priority over env so UI changes take effect
+        // Special case: ADMIN_PASSWORD - DB takes priority for password changes
         if (key === 'ADMIN_PASSWORD') {
             const dbVal = await this.getFromDb(key);
             if (dbVal !== undefined) {
                 this.cache.set(key, dbVal);
                 return dbVal;
             }
-            // Fall back to env variable
             const envVal = process.env[key];
             if (envVal) {
                 this.cache.set(key, envVal);
@@ -78,16 +89,27 @@ export class ConfigService {
             return undefined;
         }
 
-        // Standard priority: Env > File > DB
+        // Vercel mode: Env only
+        if (isVercel()) {
+            const envVal = process.env[key];
+            if (envVal) {
+                this.cache.set(key, envVal);
+                return envVal;
+            }
+            return undefined;
+        }
+
+        // VPS mode: File > Env > DB
+        // File takes precedence so users can override env vars
+        if (this.fileConfig[key]) {
+            this.cache.set(key, this.fileConfig[key]);
+            return this.fileConfig[key];
+        }
+
         const envVal = process.env[key];
         if (envVal) {
             this.cache.set(key, envVal);
             return envVal;
-        }
-
-        if (this.fileConfig[key]) {
-            this.cache.set(key, this.fileConfig[key]);
-            return this.fileConfig[key];
         }
 
         const dbVal = await this.getFromDb(key);
@@ -130,11 +152,20 @@ export class ConfigService {
 
     /**
      * Save a config value
-     * Database connection strings go to File (for VPS persistence)
-     * Others go to DB
+     * 
+     * Vercel: Throws error (read-only)
+     * VPS: Saves to file (persists across restarts)
      */
     async set(key: string, value: string): Promise<void> {
-        // Database connection strings go to File for VPS/Docker persistence
+        // Cannot modify config on Vercel
+        if (isVercel()) {
+            throw new Error(
+                'Configuration cannot be modified at runtime on Vercel. ' +
+                'Please set environment variables in your Vercel project settings and redeploy.'
+            );
+        }
+
+        // Database connection strings go to File for persistence
         if (key === 'DATABASE_URL' || key === 'TURSO_DATABASE_URL' || key === 'TURSO_AUTH_TOKEN') {
             this.fileConfig[key] = value;
             this.saveFileConfig();
@@ -142,6 +173,7 @@ export class ConfigService {
             return;
         }
 
+        // Other configs go to DB if available
         const db = await getDb();
         const dbUrl = process.env.DATABASE_URL || process.env.TURSO_DATABASE_URL || this.fileConfig['DATABASE_URL'] || this.fileConfig['TURSO_DATABASE_URL'];
 
@@ -177,31 +209,30 @@ export class ConfigService {
     }
 
     /**
-     * Get database configuration from environment or file
-     * Simplified: only reads, no runtime switching
+     * Get database configuration
+     * 
+     * Vercel: Env only
+     * VPS: File > Env (File takes precedence)
      */
     async getDatabaseConfig(): Promise<{ provider: 'turso' | 'supabase'; url: string; token?: string } | null> {
-        // Check environment variables first
-        const tursoUrl = process.env.TURSO_DATABASE_URL;
-        const tursoToken = process.env.TURSO_AUTH_TOKEN;
-        
-        if (tursoUrl) {
-            return {
-                provider: 'turso',
-                url: tursoUrl,
-                token: tursoToken
-            };
+        if (isVercel()) {
+            // Vercel: Only check environment variables
+            const tursoUrl = process.env.TURSO_DATABASE_URL;
+            const tursoToken = process.env.TURSO_AUTH_TOKEN;
+            
+            if (tursoUrl) {
+                return { provider: 'turso', url: tursoUrl, token: tursoToken };
+            }
+
+            const pgUrl = process.env.DATABASE_URL;
+            if (pgUrl) {
+                return { provider: 'supabase', url: pgUrl };
+            }
+
+            return null;
         }
 
-        const pgUrl = process.env.DATABASE_URL;
-        if (pgUrl) {
-            return {
-                provider: 'supabase',
-                url: pgUrl
-            };
-        }
-
-        // Fallback to file config (for VPS/Docker)
+        // VPS: File takes precedence over Env
         if (this.fileConfig['TURSO_DATABASE_URL']) {
             return {
                 provider: 'turso',
@@ -211,13 +242,30 @@ export class ConfigService {
         }
 
         if (this.fileConfig['DATABASE_URL']) {
-            return {
-                provider: 'supabase',
-                url: this.fileConfig['DATABASE_URL']
-            };
+            return { provider: 'supabase', url: this.fileConfig['DATABASE_URL'] };
+        }
+
+        // Fall back to environment variables
+        const tursoUrl = process.env.TURSO_DATABASE_URL;
+        const tursoToken = process.env.TURSO_AUTH_TOKEN;
+        
+        if (tursoUrl) {
+            return { provider: 'turso', url: tursoUrl, token: tursoToken };
+        }
+
+        const pgUrl = process.env.DATABASE_URL;
+        if (pgUrl) {
+            return { provider: 'supabase', url: pgUrl };
         }
 
         return null;
+    }
+
+    /**
+     * Check if configuration can be modified
+     */
+    canModify(): boolean {
+        return canModifyConfig();
     }
 }
 
