@@ -60,11 +60,18 @@ Key: TURSO_AUTH_TOKEN
 Value: eyJhbGciOiJFZERTQSIs... (your token)
 ```
 
-**Option B: Supabase (PostgreSQL)**
+**Option B: Any PostgreSQL Database**
 ```
 Key: DATABASE_URL
-Value: postgresql://user:password@host.supabase.co:5432/postgres
+Value: postgresql://user:password@host:5432/database
 ```
+
+Works with:
+- **Supabase** — `postgresql://postgres:pass@host.supabase.co:5432/postgres`
+- **AWS RDS** — `postgresql://user:pass@mydb.xyz.us-east-1.rds.amazonaws.com:5432/dbname`
+- **Google Cloud SQL** — `postgresql://user:pass@/dbname?host=/cloudsql/...`
+- **Self-hosted** — `postgresql://user:pass@localhost:5432/mydatabase`
+- **Any standard PostgreSQL** — Just use the connection string
 
 **Optional:**
 ```
@@ -131,22 +138,32 @@ docker-compose up -d
 
 ## Database Options
 
-### Turso (Recommended)
+### Turso (Recommended for Vercel)
 
 ```
 TURSO_DATABASE_URL=libsql://your-db.turso.io
 TURSO_AUTH_TOKEN=your-token
 ```
 
-**Pros:** Edge database, generous free tier, SQLite compatible
+**Pros:** Edge database, generous free tier, SQLite compatible, works great with serverless
 
-### Supabase
+### Any PostgreSQL (Universal)
+
+Easy Note works with **any standard PostgreSQL database**. Just use the connection string:
 
 ```
-DATABASE_URL=postgresql://user:pass@host.supabase.co:5432/postgres
+DATABASE_URL=postgresql://user:password@host:5432/database
 ```
 
-**Pros:** Full PostgreSQL, great dashboard, generous free tier
+**Supported providers:**
+- **Supabase** — Great free tier, easy setup
+- **AWS RDS** — Enterprise grade, scalable
+- **Google Cloud SQL** — Managed PostgreSQL
+- **Neon** — Serverless PostgreSQL
+- **Self-hosted** — Full control, no vendor lock-in
+- **Any PostgreSQL 12+** — Standard connection string format
+
+**Pros:** Universal compatibility, mature ecosystem, familiar SQL
 
 ### Self-hosted SQLite (VPS only)
 

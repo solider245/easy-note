@@ -33,13 +33,15 @@ Perfect for personal use. Zero maintenance.
 - `TURSO_DATABASE_URL` = `libsql://your-db.turso.io`
 - `TURSO_AUTH_TOKEN` = `eyJhbGci...` (your token)
 
-**Supabase (PostgreSQL):**
-- `DATABASE_URL` = `postgresql://user:pass@host.supabase.co:5432/postgres`
+**Any PostgreSQL (Supabase, RDS, Self-hosted, etc.):**
+- `DATABASE_URL` = `postgresql://user:pass@host:5432/database`
 
 **Optional:**
 - `ADMIN_PASSWORD` = your login password
 
 Key names must be exactly as shown above. Then click "Deploy"!
+
+> 💡 **Tip:** You can use any PostgreSQL database - Supabase, AWS RDS, Google Cloud SQL, or your own server!
 
 ### Option 2: VPS/Docker (Flexible)
 
