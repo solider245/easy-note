@@ -2,7 +2,7 @@
 
 import { NoteMeta } from '@/lib/types';
 import { formatDistanceToNow } from 'date-fns';
-import { Search, Plus, Pin, SortAsc, SortDesc, Clock, Tag, X } from 'lucide-react';
+import { Search, Plus, Pin, SortAsc, SortDesc, Clock, Tag, X, Archive } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import debounce from 'lodash.debounce';
 
@@ -230,11 +230,25 @@ export default function NoteList({ notes, selectedId, onSelect, onNew, onSearch,
 
             {/* Note count */}
             {(localQuery || activeTag) && (
-                <div className="px-4 py-1.5 text-xs text-gray-500 dark:text-gray-400 bg-blue-50/50 dark:bg-blue-900/10 border-b border-gray-100 dark:border-gray-800">
-                    {sorted.length === 0
-                        ? 'No results'
-                        : `${sorted.length} note${sorted.length !== 1 ? 's' : ''}${localQuery ? ` for "${localQuery}"` : ''}${activeTag ? ` tagged #${activeTag}` : ''}`
-                    }
+                <div className="px-4 py-1.5 text-xs text-gray-500 dark:text-gray-400 bg-blue-50/50 dark:bg-blue-900/10 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                    <span>
+                        {sorted.length === 0
+                            ? 'No results'
+                            : `${sorted.length} note${sorted.length !== 1 ? 's' : ''}${localQuery ? ` for "${localQuery}"` : ''}${activeTag ? ` tagged #${activeTag}` : ''}`
+                        }
+                    </span>
+                    {(() => {
+                        const archivedCount = sorted.filter(n => n.archived_at).length;
+                        if (archivedCount > 0) {
+                            return (
+                                <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                                    <Archive className="w-3 h-3" />
+                                    {archivedCount} archived
+                                </span>
+                            );
+                        }
+                        return null;
+                    })()}
                 </div>
             )}
 
@@ -266,15 +280,22 @@ export default function NoteList({ notes, selectedId, onSelect, onNew, onSearch,
                             className={`px-4 py-3 cursor-pointer hover:bg-blue-50 dark:hover:bg-gray-700/60 transition-colors border-b border-gray-100 dark:border-gray-700/50 ${selectedId === note.id
                                 ? 'bg-blue-50 dark:bg-blue-900/20 border-l-2 border-l-blue-500'
                                 : 'border-l-2 border-l-transparent'
-                                }`}
+                                } ${note.archived_at ? 'bg-amber-50/30 dark:bg-amber-900/10' : ''}`}
                         >
                             <div className="flex items-start justify-between gap-2">
-                                <h3 className="font-medium text-sm text-gray-800 dark:text-gray-200 truncate flex-1 leading-snug">
+                                <h3 className={`font-medium text-sm truncate flex-1 leading-snug ${note.archived_at ? 'text-gray-600 dark:text-gray-400' : 'text-gray-800 dark:text-gray-200'}`}>
                                     {highlight(note.title, localQuery)}
                                 </h3>
-                                {note.isPinned && (
-                                    <Pin className="w-3 h-3 text-blue-500 fill-blue-500 flex-shrink-0 mt-0.5" />
-                                )}
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                    {note.archived_at && (
+                                        <span title="Archived">
+                                            <Archive className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                                        </span>
+                                    )}
+                                    {note.isPinned && (
+                                        <Pin className="w-3 h-3 text-blue-500 fill-blue-500 flex-shrink-0" />
+                                    )}
+                                </div>
                             </div>
                             {'preview' in note && (note as any).preview && (
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2 leading-relaxed">

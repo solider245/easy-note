@@ -283,12 +283,15 @@ export class DbAdapter implements StorageAdapter {
         // Use FTS5 for full-text search with ranking
         const ftsQuery = query.split(/\s+/).filter(Boolean).map(term => `"${term}"`).join(' AND ');
         
+        // Search both active and archived notes (not deleted)
         const result = await db.execute(`
             SELECT n.*, rank
             FROM notes_fts
             JOIN notes n ON notes_fts.rowid = n.rowid
-            WHERE notes_fts MATCH ? AND n.deleted_at IS NULL AND n.archived_at IS NULL
-            ORDER BY rank
+            WHERE notes_fts MATCH ? AND n.deleted_at IS NULL
+            ORDER BY 
+                CASE WHEN n.archived_at IS NULL THEN 0 ELSE 1 END,
+                rank
             LIMIT 100
         `, [ftsQuery]);
 
@@ -297,13 +300,17 @@ export class DbAdapter implements StorageAdapter {
 
     private async searchPostgresFTS(db: any, query: string): Promise<NoteMeta[]> {
         // Use PostgreSQL tsvector with ranking
+        // Search both active and archived notes (not deleted)
         const result = await db.execute(`
             SELECT n.*, 
                    ts_rank_cd(search_vector, plainto_tsquery('simple', $1), 32) AS rank
             FROM notes n
             WHERE search_vector @@ plainto_tsquery('simple', $1)
-              AND deleted_at IS NULL AND archived_at IS NULL
-            ORDER BY rank DESC, updated_at DESC
+              AND deleted_at IS NULL
+            ORDER BY 
+                CASE WHEN n.archived_at IS NULL THEN 0 ELSE 1 END,
+                rank DESC, 
+                updated_at DESC
             LIMIT 100
         `, [query]);
 
