@@ -1,198 +1,164 @@
-# Easy Note
+# Easy Note v1.0.0 🚀
 
-A minimalist, private Markdown note-taking app. Deploy in 3 minutes on Vercel.
+> 一个极简、安全、智能的 Markdown 笔记应用，3 分钟完成部署。
 
-![Screenshot](https://via.placeholder.com/800x400?text=Easy+Note+Screenshot)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/solider245/easy-note)
 
-## ✨ Features
+## ✨ 核心功能
 
-- **WYSIWYG Markdown Editor** — Beautiful editing powered by Milkdown
-- **Full-text Search** — Instant search across all notes (⌘K)
-- **Tags & Organization** — Organize notes with tags
-- **Auto-save** — Never lose your work
-- **Dark Mode** — Easy on the eyes
-- **Data Export/Import** — JSON backup & restore
-- **Mobile-friendly** — Works on all devices
+### 📝 编辑体验
+- **所见即所得** - Markdown 实时预览，支持代码高亮
+- **自动保存** - 本地优先 + 云端同步，永不丢失内容
+- **AI 助手** - 智能续写、摘要生成、文本优化
+- **快捷键** - ⌘N 新建、⌘K 搜索、⌘S 保存、⌘⌫ 归档
 
-## 🚀 Deployment Options
+### 🔍 搜索与组织
+- **全文搜索** - 支持标题和内容搜索，毫秒级响应
+- **归档系统** - 笔记归档后永久保留，搜索时可区分查看
+- **标签管理** - 灵活的标签分类，支持标签筛选
+- **置顶功能** - 重要笔记置顶显示
 
-### Option 1: Vercel (Easiest - 3 Minutes)
+### 📊 数据洞察
+- **写作统计** - 字数、阅读时间、代码块、图片数量自动统计
+- **热力图** - GitHub 风格的写作活跃度可视化
+- **数据导出** - JSON 备份，随时导出全部笔记
 
-Perfect for personal use. Zero maintenance.
+### 🎨 界面设计
+- **深色模式** - 护眼模式，自动跟随系统
+- **响应式布局** - 完美适配手机、平板、电脑
+- **即时加载** - 服务端渲染骨架屏，首屏 <100ms
 
-```bash
-# 1. Fork & Deploy
-# Click the button below and follow the prompts
-```
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yourusername/easy-note)
-
-**⚠️ Important:** Fill in environment variables **during deployment**, not after:
-
-**Turso (SQLite):**
-- `TURSO_DATABASE_URL` = `libsql://your-db.turso.io`
-- `TURSO_AUTH_TOKEN` = `eyJhbGci...` (your token)
-
-**Any PostgreSQL (Supabase, RDS, Self-hosted, etc.):**
-- `DATABASE_URL` = `postgresql://user:pass@host:5432/database`
-
-**Optional:**
-- `ADMIN_PASSWORD` = your login password (default: admin123)
-  - ⚠️ **Security:** If not set, default password is `admin123`. You can change this after deployment in Settings → Security.
-
-Key names must be exactly as shown above. Then click "Deploy"!
-
-> 💡 **Note:** You can change the admin password anytime after deployment via Settings → Security. No need to redeploy!
-
-> 💡 **Tip:** You can use any PostgreSQL database - Supabase, AWS RDS, Google Cloud SQL, or your own server!
-
-### Option 2: VPS/Docker (Flexible)
-
-Perfect for power users who need:
-- Runtime configuration changes
-- Full data control
-- Custom infrastructure
-
-See [docs/VPS.md](./docs/VPS.md) for VPS-specific instructions.
+### 🔐 安全特性
+- **密码保护** - 自动生成的强密码，支持自定义修改
+- **数据加密** - 敏感配置 AES-256-GCM 加密存储
+- **登录保护** - 15 分钟 5 次尝试限制，防暴力破解
+- **无追踪** - 无第三方分析，你的数据只属于你
 
 ---
 
-## 📝 Database Setup (Turso - Recommended)
+## 🚀 快速部署
 
-### 1. Create Turso Account
+### 方式一：Vercel 一键部署（推荐，3 分钟）
+
+**适用场景**：个人使用，零维护成本
+
+1. 点击上方 **Deploy with Vercel** 按钮
+2. 连接 GitHub 并选择项目名称
+3. 配置环境变量（见下方）
+4. 点击 Deploy 完成部署
+
+**环境变量配置**：
 
 ```bash
-# Install Turso CLI
-brew install tursodatabase/tap/turso
+# 数据库二选一
 
-# Login
-turso auth login
-```
-
-### 2. Create Database
-
-```bash
-# Create a new database
-turso db create my-notes
-
-# Get the connection URL
-turso db show my-notes
-# Output: libsql://my-notes-username.turso.io
-
-# Create an auth token
-turso db tokens create my-notes
-# Output: eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9...
-```
-
-### 3. Configure Environment Variables
-
-**For Vercel:**
-Add these in the Vercel deployment form:
-```
+# 选项 A：Turso SQLite（推荐，免费额度充足）
 TURSO_DATABASE_URL=libsql://your-db.turso.io
-TURSO_AUTH_TOKEN=your-auth-token-here
+TURSO_AUTH_TOKEN=eyJhbGci...
+
+# 选项 B：PostgreSQL（Supabase、AWS RDS 等）
+DATABASE_URL=postgresql://user:pass@host:5432/database
+
+# 可选：安全配置
+ADMIN_PASSWORD=your-secure-password      # 登录密码，不设置则自动生成
+CONFIG_ENCRYPTION_KEY=32-char-secret-key # 数据加密密钥，建议设置
+OPENAI_API_KEY=sk-...                    # AI 功能，不设置则禁用
 ```
 
-**For VPS:**
-See [docs/VPS.md](./docs/VPS.md) for configuration options.
+> 💡 **提示**：首次部署后，查看 Vercel 日志获取自动生成的密码
 
 ---
 
-## 🎯 Usage
+### 方式二：VPS / Docker 部署
 
-| Shortcut | Action |
-|----------|--------|
-| `⌘N` | New note |
-| `⌘K` | Search notes |
-| `⌘P` | Command palette |
-| `⌘⌫` | Delete note |
+**适用场景**：需要自定义配置、完整数据控制
+
+查看 [docs/VPS.md](./docs/VPS.md) 获取详细指南。
 
 ---
 
-## ⚙️ Advanced Features (Optional)
+## 📚 使用指南
 
-Enable these features by adding environment variables during deployment:
+### 首次使用
 
-### AI Writing Assistant
+1. **登录**
+   - 访问部署后的网址
+   - 输入密码（查看 Vercel 日志获取自动生成的密码）
+   - 建议立即在设置中修改密码
 
-Add these to enable AI-powered writing assistance:
+2. **创建笔记**
+   - 点击侧边栏「+ New Note」按钮
+   - 或使用快捷键 ⌘N
+   - 开始写作，自动保存
 
-```bash
-OPENAI_API_KEY=sk-your-openai-api-key-here
-OPENAI_MODEL=gpt-4o-mini  # Optional, defaults to gpt-4o-mini
-```
+3. **搜索笔记**
+   - 点击搜索框或按 ⌘K
+   - 输入关键词，实时搜索标题和内容
+   - 归档笔记也会出现在搜索结果中（带归档标识）
 
-**Features enabled:**
-- Continue writing (⌘⇧A)
-- Summarize content
-- Auto-generate note titles
+4. **归档笔记**
+   - 点击编辑器工具栏的「归档」按钮
+   - 或使用快捷键 ⌘⌫
+   - 归档笔记会从主列表移除，可在 Archive 页面查看
 
-### External Storage (S3)
+### 快捷键大全
 
-Store images and media on S3-compatible storage:
+| 快捷键 | 功能 |
+|--------|------|
+| ⌘N | 新建笔记 |
+| ⌘K | 搜索笔记 |
+| ⌘S | 手动保存 |
+| ⌘⌫ | 归档笔记 |
+| ⌘⇧A | AI 续写（需配置 OpenAI） |
 
-```bash
-# Required
-S3_ENDPOINT=https://your-r2-or-s3-endpoint.com
-S3_BUCKET=your-bucket-name
-S3_ACCESS_KEY_ID=your-access-key
-S3_SECRET_ACCESS_KEY=your-secret-key
+### AI 写作助手（可选）
 
-# Optional
-S3_REGION=auto              # Or specific region like us-east-1
-S3_PUBLIC_URL=              # Custom CDN domain (optional)
-```
-
-**Supported providers:** AWS S3, Cloudflare R2, MinIO, Wasabi, etc.
-
-### Note Sharing
-
-Enable public note sharing links:
-
-```bash
-ENABLE_SHARING=true
-```
+配置 `OPENAI_API_KEY` 后可用：
+- **智能续写** - 根据上下文继续写作
+- **生成摘要** - 一键总结笔记内容
+- **优化文本** - 改进表达和语法
 
 ---
 
-## 🏗️ Architecture
+## 🛠️ 技术架构
 
-- **Frontend:** Next.js 16 + React 19 + TypeScript
-- **Editor:** Milkdown (WYSIWYG Markdown)
-- **Database:** SQLite (Turso) or PostgreSQL (Supabase)
-- **Deployment:** Vercel (serverless) or VPS (Docker)
-
----
-
-## 📦 Platform-Specific Guides
-
-| Platform | Configuration | Notes |
-|----------|--------------|-------|
-| **Vercel** | Environment variables | Read-only, requires redeploy |
-| **VPS** | File + Environment | Runtime changes supported |
-| **Docker** | Environment or File | See docs/VPS.md |
+- **前端**: Next.js 16 + React 19 + TypeScript + Tailwind CSS
+- **编辑器**: Markdown 实时预览
+- **数据库**: SQLite (Turso) / PostgreSQL 双支持
+- **部署**: Vercel Serverless / VPS / Docker
+- **安全**: AES-256-GCM 加密、Rate Limiting、HttpOnly Cookie
 
 ---
 
-## 💾 Data Backup
+## 📦 版本历史
 
-Your notes are stored in your own database. We recommend regular backups:
-
-1. Go to Settings → Data Management
-2. Click "Export Backup" to download all notes as JSON
-3. Store the backup file safely
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+- **v1.0.0** (2024-02) - 正式版发布，安全加固，生产就绪
+- **v1.0.0-rc1** - 候选版，功能完备
+- **v1.2.0** - 写作统计、热力图、全文搜索
+- **v1.1.0** - 22 项数据库增强字段
+- **v1.0.0-offline** - 离线优先编辑系统
 
 ---
 
-## 📄 License
+## 💾 数据备份
 
-MIT License - feel free to use this project for personal or commercial purposes.
+你的数据存储在自己的数据库中，建议定期备份：
+
+1. 进入 Settings → Data Management
+2. 点击「Export Backup」下载 JSON 备份
+3. 安全保存备份文件
+
+---
+
+## 🤝 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+---
+
+## 📄 许可证
+
+MIT License - 可自由用于个人或商业项目。
 
 ---
 
