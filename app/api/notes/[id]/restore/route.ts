@@ -17,6 +17,7 @@ export async function POST(
         const restoredNote = {
             ...existing,
             deletedAt: null,
+            archived_at: null,
             updatedAt: Date.now(),
         };
 

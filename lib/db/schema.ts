@@ -43,6 +43,9 @@ export const notes = sqliteTable('notes', {
     last_viewed_at: integer('last_viewed_at', { mode: 'timestamp_ms' }),
     updated_device: text('updated_device'),
     version: integer('version').default(1),
+
+    // v1.3.0: Archive system
+    archived_at: integer('archived_at', { mode: 'timestamp_ms' }),
 });
 
 export const settings = sqliteTable('settings', {

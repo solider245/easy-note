@@ -90,7 +90,7 @@ export class DbAdapter implements StorageAdapter {
     async list(): Promise<NoteMeta[]> {
         const db = await getDb();
         const { notes } = await getSchema();
-        const { desc, isNull } = await import('drizzle-orm');
+        const { desc, isNull, and } = await import('drizzle-orm');
 
         const rows = await (db as any).select({
             id: notes.id,
@@ -104,7 +104,7 @@ export class DbAdapter implements StorageAdapter {
             deletedAt: notes.deletedAt,
         })
             .from(notes)
-            .where(isNull(notes.deletedAt))
+            .where(and(isNull(notes.deletedAt), isNull(notes.archived_at)))
             .orderBy(desc(notes.isPinned), desc(notes.updatedAt));
 
         if (rows.length === 0) {
@@ -287,7 +287,7 @@ export class DbAdapter implements StorageAdapter {
             SELECT n.*, rank
             FROM notes_fts
             JOIN notes n ON notes_fts.rowid = n.rowid
-            WHERE notes_fts MATCH ? AND n.deleted_at IS NULL
+            WHERE notes_fts MATCH ? AND n.deleted_at IS NULL AND n.archived_at IS NULL
             ORDER BY rank
             LIMIT 100
         `, [ftsQuery]);
@@ -302,7 +302,7 @@ export class DbAdapter implements StorageAdapter {
                    ts_rank_cd(search_vector, plainto_tsquery('simple', $1), 32) AS rank
             FROM notes n
             WHERE search_vector @@ plainto_tsquery('simple', $1)
-              AND deleted_at IS NULL
+              AND deleted_at IS NULL AND archived_at IS NULL
             ORDER BY rank DESC, updated_at DESC
             LIMIT 100
         `, [query]);

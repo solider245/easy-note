@@ -43,6 +43,9 @@ export const notes = pgTable('notes', {
     last_viewed_at: bigint('last_viewed_at', { mode: 'number' }),
     updated_device: text('updated_device'),
     version: bigint('version', { mode: 'number' }).default(1),
+
+    // v1.3.0: Archive system
+    archived_at: bigint('archived_at', { mode: 'number' }),
 });
 
 export const settings = pgTable('settings', {

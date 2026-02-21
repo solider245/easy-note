@@ -10,7 +10,7 @@ import { Note, NoteMeta } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import debounce from 'lodash.debounce';
 import { toast } from 'sonner';
-import { Pin, Trash2, Settings, Download, LogOut, Menu, Tag, X, Share2, LayoutTemplate, FileUp, FileDown, Copy, Save } from 'lucide-react';
+import { Pin, Archive, Settings, Download, LogOut, Menu, Tag, X, Share2, LayoutTemplate, FileUp, FileDown, Copy, Save } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import { saveLocal, getLocal } from '@/lib/storage/local-db';
 
@@ -157,10 +157,10 @@ export default function AppMain({ isUsingDefaultPass: initialIsUsingDefaultPass 
           setTagInput('');
         }
       }
-      // Cmd+Delete: delete selected note
+      // Cmd+Delete: archive selected note
       if ((e.metaKey || e.ctrlKey) && e.key === 'Backspace' && selectedNote && !isEditing) {
         e.preventDefault();
-        handleDeleteNote(selectedNote.id);
+        handleArchiveNote(selectedNote.id);
       }
       // Cmd+S: manual save
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
@@ -409,19 +409,19 @@ export default function AppMain({ isUsingDefaultPass: initialIsUsingDefaultPass 
     };
   }, [hasUnsavedChanges, selectedNote]);
 
-  const handleDeleteNote = async (id: string) => {
-    if (!confirm('Move this note to Trash? You can restore it from the Trash page.')) return;
+  const handleArchiveNote = async (id: string) => {
+    if (!confirm('Archive this note? It will be moved to the Archive page where you can restore or permanently delete it.')) return;
     try {
-      const res = await fetch(`/api/notes/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/notes/${id}/archive`, { method: 'POST' });
       if (res.ok) {
         if (selectedNote?.id === id) setSelectedNote(null);
         setNotes(prev => prev.filter(n => n.id !== id));
-        toast.success('Note moved to Trash', {
-          action: { label: 'View Trash', onClick: () => router.push('/trash') },
+        toast.success('Note archived', {
+          action: { label: 'View Archive', onClick: () => router.push('/archive') },
         });
       }
     } catch {
-      toast.error('Failed to delete note');
+      toast.error('Failed to archive note');
     }
   };
 
@@ -724,11 +724,11 @@ export default function AppMain({ isUsingDefaultPass: initialIsUsingDefaultPass 
               </button>
             </div>
             <button
-              onClick={() => router.push('/trash')}
+              onClick={() => router.push('/archive')}
               className="w-full py-2 px-3 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors flex items-center justify-center gap-2"
             >
-              <Trash2 className="h-4 w-4" />
-              Trash
+              <Archive className="h-4 w-4" />
+              Archive
             </button>
             <button
               onClick={() => router.push('/settings')}
@@ -871,14 +871,15 @@ export default function AppMain({ isUsingDefaultPass: initialIsUsingDefaultPass 
                   >
                     <FileDown className="h-4 w-4" />
                   </button>
-                  {/* Delete button */}
+                  {/* Archive button */}
                   <button
-                    onClick={() => handleDeleteNote(selectedNote.id)}
-                    className="text-gray-400 hover:text-red-500 transition-colors p-2"
-                    title="Delete Note (⌘⌫)"
+                    onClick={() => handleArchiveNote(selectedNote.id)}
+                    className="text-gray-400 hover:text-amber-500 transition-colors p-2"
+                    title="Archive Note (⌘⌫)"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                      <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" />
+                      <path fillRule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" clipRule="evenodd" />
                     </svg>
                   </button>
                 </div>

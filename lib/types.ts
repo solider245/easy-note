@@ -38,10 +38,13 @@ export interface NoteMeta {
   status?: string;
   priority?: number;
   
-  // Audit
-  last_viewed_at?: number | null;
-  updated_device?: string;
-  version?: number;
+    // Audit
+    last_viewed_at?: number | null;
+    updated_device?: string;
+    version?: number;
+
+    // v1.3.0: Archive system
+    archived_at?: number | null;
 }
 
 export interface Note extends NoteMeta {

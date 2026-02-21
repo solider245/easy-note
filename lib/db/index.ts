@@ -129,6 +129,20 @@ async function initializeDb(db: AnyDrizzle, isSQLite: boolean) {
             try { await client.execute(`ALTER TABLE notes ADD COLUMN last_viewed_at INTEGER`); } catch (e) { }
             try { await client.execute(`ALTER TABLE notes ADD COLUMN updated_device TEXT`); } catch (e) { }
             try { await client.execute(`ALTER TABLE notes ADD COLUMN version INTEGER DEFAULT 1`); } catch (e) { }
+            
+            // v1.3.0: Archive system - replace Trash with Archive
+            try { await client.execute(`ALTER TABLE notes ADD COLUMN archived_at INTEGER`); } catch (e) { }
+            
+            // Migrate existing trashed notes to archived (if not already purged)
+            try {
+                await client.execute(`
+                    UPDATE notes 
+                    SET archived_at = deleted_at,
+                        deleted_at = NULL
+                    WHERE deleted_at IS NOT NULL
+                `);
+            } catch (e) { }
+            
             await client.execute(`
                 CREATE TABLE IF NOT EXISTS settings (
                     key TEXT PRIMARY KEY,
@@ -311,6 +325,20 @@ async function initializeDb(db: AnyDrizzle, isSQLite: boolean) {
             try { await postgresDb.execute(drizzleSql`ALTER TABLE notes ADD COLUMN IF NOT EXISTS last_viewed_at BIGINT`); } catch (e) { }
             try { await postgresDb.execute(drizzleSql`ALTER TABLE notes ADD COLUMN IF NOT EXISTS updated_device TEXT`); } catch (e) { }
             try { await postgresDb.execute(drizzleSql`ALTER TABLE notes ADD COLUMN IF NOT EXISTS version INTEGER DEFAULT 1`); } catch (e) { }
+            
+            // v1.3.0: Archive system - replace Trash with Archive
+            try { await postgresDb.execute(drizzleSql`ALTER TABLE notes ADD COLUMN IF NOT EXISTS archived_at BIGINT`); } catch (e) { }
+            
+            // Migrate existing trashed notes to archived
+            try {
+                await postgresDb.execute(drizzleSql`
+                    UPDATE notes 
+                    SET archived_at = deleted_at,
+                        deleted_at = NULL
+                    WHERE deleted_at IS NOT NULL
+                `);
+            } catch (e) { }
+            
             await postgresDb.execute(drizzleSql`
                 CREATE TABLE IF NOT EXISTS settings (
                     key TEXT PRIMARY KEY,
