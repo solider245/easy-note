@@ -2,6 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getStorage } from '@/lib/storage';
 import { nanoid } from 'nanoid';
 import { calculateNoteStats, getDeviceInfo } from '@/lib/utils/note-stats';
+import { createNoteSchema, validateRequest } from '@/lib/validation';
+
+// Helper to return safe error response (no stack in production)
+function errorResponse(error: unknown, status: number = 500) {
+    const isDev = process.env.NODE_ENV === 'development';
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const stack = error instanceof Error ? error.stack : undefined;
+    
+    return NextResponse.json(
+        { 
+            error: message,
+            ...(isDev && stack ? { stack } : {})
+        }, 
+        { status }
+    );
+}
 
 export async function GET(request: NextRequest) {
     try {
@@ -15,16 +31,22 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(notes);
     } catch (e: unknown) {
         console.error('[API] GET /api/notes error:', e);
-        return NextResponse.json({ error: (e as Error).message, stack: (e as Error).stack }, { status: 500 });
+        return errorResponse(e, 500);
     }
 }
 
 export async function POST(request: NextRequest) {
     try {
+        // Validate input
+        const validation = await validateRequest(request, createNoteSchema);
+        if (!validation.success) {
+            return NextResponse.json({ error: validation.error }, { status: 400 });
+        }
+
         console.log('[API] POST /api/notes - Getting storage...');
         const storage = await getStorage();
         console.log('[API] Storage obtained');
-        const { title, content } = await request.json();
+        const { title, content } = validation.data;
         console.log('[API] Request body parsed:', { title, content: content?.substring(0, 50) });
 
         const id = nanoid();
@@ -76,6 +98,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(note);
     } catch (e: unknown) {
         console.error('[API] POST /api/notes error:', e);
-        return NextResponse.json({ error: (e as Error).message, stack: (e as Error).stack }, { status: 500 });
+        return errorResponse(e, 500);
     }
 }

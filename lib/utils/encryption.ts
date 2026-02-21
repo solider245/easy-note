@@ -3,12 +3,26 @@ import crypto from 'crypto';
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
 const TAG_LENGTH = 16;
-const DEFAULT_KEY = 'easy-note-default-secret-key-32-chars!!'; // Fallback
+
+// Generate a random key if not provided (stored in memory only for this session)
+let sessionKey: Buffer | null = null;
 
 function getEncryptionKey(): Buffer {
-    const key = process.env.CONFIG_ENCRYPTION_KEY || DEFAULT_KEY;
-    // Ensure 32 bytes for AES-256
-    return crypto.createHash('sha256').update(key).digest();
+    // Use provided environment variable
+    if (process.env.CONFIG_ENCRYPTION_KEY) {
+        // Ensure 32 bytes for AES-256
+        return crypto.createHash('sha256').update(process.env.CONFIG_ENCRYPTION_KEY).digest();
+    }
+    
+    // Generate a session key if none exists
+    if (!sessionKey) {
+        sessionKey = crypto.randomBytes(32);
+        console.warn('[Security] CONFIG_ENCRYPTION_KEY not set. Using session-only random key.');
+        console.warn('[Security] Encrypted data will NOT be decryptable after server restart!');
+        console.warn('[Security] Please set CONFIG_ENCRYPTION_KEY environment variable.');
+    }
+    
+    return sessionKey;
 }
 
 export function encrypt(text: string): string {

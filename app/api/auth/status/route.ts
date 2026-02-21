@@ -1,23 +1,27 @@
 import { NextResponse } from 'next/server';
-import { configService } from '@/lib/config/config-service';
+import { isUsingGeneratedPassword, isPasswordProtected } from '@/lib/auth';
 
 export async function GET() {
     try {
-        // Check if using default password
+        // Check password status
+        const passwordProtected = await isPasswordProtected();
+        const isGeneratedPassword = await isUsingGeneratedPassword();
         const envPassword = process.env.ADMIN_PASSWORD;
-        const dbPassword = await configService.get('ADMIN_PASSWORD');
         
-        // Using default password if:
-        // 1. No env password AND no db password (never changed)
-        // 2. Password is explicitly set to admin123
-        const isUsingDefaultPassword = !envPassword && !dbPassword;
-        const isPasswordSet = !!(envPassword || dbPassword);
+        // Security warning conditions:
+        // 1. Using auto-generated password (not set by user)
+        // 2. No password protection at all
+        const isUsingDefaultPassword = isGeneratedPassword || !passwordProtected;
         
         return NextResponse.json({
             isUsingDefaultPassword,
-            isPasswordSet,
+            isPasswordSet: passwordProtected,
             hasEnvPassword: !!envPassword,
-            hasDbPassword: !!dbPassword,
+            isGeneratedPassword,
+            // Include a message for the user if using generated password
+            message: isGeneratedPassword 
+                ? 'Using auto-generated password. Please change it in settings for security.'
+                : null,
         });
     } catch (error) {
         console.error('Auth status check error:', error);
