@@ -376,4 +376,27 @@ export class DbAdapter implements StorageAdapter {
             };
         });
     }
+
+    async listArchived(): Promise<NoteMeta[]> {
+        const db = await getDb();
+        const { notes } = await getSchema();
+        const { desc, isNotNull } = await import('drizzle-orm');
+
+        const rows = await (db as any).select({
+            id: notes.id,
+            title: notes.title,
+            content: notes.content,
+            tags: notes.tags,
+            shareToken: notes.shareToken,
+            createdAt: notes.createdAt,
+            updatedAt: notes.updatedAt,
+            isPinned: notes.isPinned,
+            deletedAt: notes.deletedAt,
+        })
+            .from(notes)
+            .where(isNotNull(notes.archived_at))
+            .orderBy(desc(notes.archived_at));
+
+        return (rows as any[]).map(r => rowToMeta(r, r.content));
+    }
 }

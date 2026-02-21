@@ -1,33 +1,17 @@
 import { NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { getStorage } from '@/lib/storage';
 
 // GET /api/notes/archive - List all archived notes
 export async function GET() {
     try {
-        const db = await getDb();
-        const isSQLite = process.env.DATABASE_URL?.startsWith('libsql://') || 
-                        process.env.DATABASE_URL?.startsWith('file:') ||
-                        process.env.TURSO_DATABASE_URL?.startsWith('libsql://');
-        
-        let query: string;
-        
-        if (isSQLite) {
-            query = `
-                SELECT * FROM notes 
-                WHERE archived_at IS NOT NULL 
-                ORDER BY archived_at DESC
-            `;
-        } else {
-            query = `
-                SELECT * FROM notes 
-                WHERE archived_at IS NOT NULL 
-                ORDER BY archived_at DESC
-            `;
-        }
-        
-        const result = await (db as any).execute(query);
-        const archivedNotes = result.rows || [];
-        
+        const storage = await getStorage();
+
+        // Use exportAll to get all notes including archived ones
+        const allNotes = await storage.exportAll();
+        const archivedNotes = allNotes
+            .filter(note => note.archived_at !== null && note.archived_at !== undefined)
+            .sort((a, b) => (b.archived_at || 0) - (a.archived_at || 0));
+
         return NextResponse.json(archivedNotes);
     } catch (e: unknown) {
         console.error('[API] GET /api/notes/archive error:', e);
