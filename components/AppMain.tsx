@@ -35,10 +35,19 @@ const NoteTemplates = dynamic(() => import('@/components/NoteTemplates'), {
   ssr: false
 });
 
-export default function AppMain({ isUsingDefaultPass: initialIsUsingDefaultPass }: { isUsingDefaultPass: boolean }) {
-  const [notes, setNotes] = useState<NoteMeta[]>([]);
+interface AppMainProps {
+  isUsingDefaultPass: boolean;
+  initialNotes?: NoteMeta[];
+}
+
+export default function AppMain({ 
+  isUsingDefaultPass: initialIsUsingDefaultPass,
+  initialNotes = []
+}: AppMainProps) {
+  const [notes, setNotes] = useState<NoteMeta[]>(initialNotes);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
-  const [loading, setLoading] = useState(true);
+  // If we have initialNotes from server, don't show loading state
+  const [loading, setLoading] = useState(initialNotes.length === 0);
   const [usage, setUsage] = useState({ used: 0, total: 250 * 1024 * 1024 });
   const [isSaving, setIsSaving] = useState(false);
   const [config, setConfig] = useState<any>(null);
@@ -72,7 +81,7 @@ export default function AppMain({ isUsingDefaultPass: initialIsUsingDefaultPass 
     }
   }, []);
 
-  // 优化后的初始化逻辑：串行加载，优先加载笔记列表
+  // 优化后的初始化逻辑：如果有初始数据则后台刷新，否则串行加载
   useEffect(() => {
     const init = async () => {
       try {
@@ -88,13 +97,16 @@ export default function AppMain({ isUsingDefaultPass: initialIsUsingDefaultPass 
           console.error('Failed to check auth status', e);
         }
 
-        // 第一步：优先加载笔记列表（对用户最重要）
-        await fetchNotes();
+        // 第一步：加载笔记列表
+        // 如果有 initialNotes，后台静默刷新；否则显示 loading
+        if (initialNotes.length > 0) {
+          // 后台刷新，用户已经看到内容了
+          fetchNotes();
+        } else {
+          await fetchNotes();
+        }
         
-        // 显示骨架屏一段时间后，再加载其他数据
-        // 让侧边栏先显示出来
-        
-        // 第二步：延迟加载配置和用量（对功能次要）
+        // 第二步：加载配置和用量（始终后台加载）
         setTimeout(async () => {
           try {
             const configRes = await fetch('/api/status/config');
@@ -117,7 +129,7 @@ export default function AppMain({ isUsingDefaultPass: initialIsUsingDefaultPass 
       }
     };
     init();
-  }, [fetchNotes]);
+  }, [fetchNotes, initialNotes.length]);
 
   // 预加载编辑器：骨架屏显示 1.5 秒后预加载
   useEffect(() => {
@@ -675,7 +687,7 @@ export default function AppMain({ isUsingDefaultPass: initialIsUsingDefaultPass 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
         <div className={`w-full md:w-72 flex-shrink-0 flex flex-col border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 ${selectedNote ? 'hidden md:flex' : 'flex'}`}>
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden relative">
             <NoteList
               notes={notes}
               selectedId={selectedNote?.id || null}
@@ -683,6 +695,12 @@ export default function AppMain({ isUsingDefaultPass: initialIsUsingDefaultPass 
               onNew={handleCreateNote}
               onSearch={fetchNotes}
             />
+            {/* 后台刷新指示器 - 当有初始数据时显示 */}
+            {initialNotes.length > 0 && loading && (
+              <div className="absolute top-2 right-2 z-10">
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" title="Syncing..." />
+              </div>
+            )}
           </div>
           {/* Drag-and-drop import zone */}
           <div
