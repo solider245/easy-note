@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStorage } from '@/lib/storage';
 import { nanoid } from 'nanoid';
+import { calculateNoteStats, getDeviceInfo } from '@/lib/utils/note-stats';
 
 export async function GET(request: NextRequest) {
     try {
@@ -28,6 +29,10 @@ export async function POST(request: NextRequest) {
 
         const id = nanoid();
         const now = Date.now();
+
+        // Calculate note statistics
+        const stats = calculateNoteStats(title || '', content || '');
+
         const note = {
             id,
             title: title || 'Untitled Note',
@@ -36,10 +41,37 @@ export async function POST(request: NextRequest) {
             updatedAt: now,
             isPinned: false,
             deletedAt: null,
+
+            // v1.1.0: Auto-calculated statistics
+            word_count: stats.word_count,
+            char_count: stats.char_count,
+            read_time_minutes: stats.read_time_minutes,
+            view_count: 0,
+            edit_count: 0,
+
+            code_blocks: stats.code_blocks,
+            image_count: stats.image_count,
+            link_count: stats.link_count,
+            content_hash: stats.content_hash,
+            cover_image: stats.cover_image,
+            first_paragraph: stats.first_paragraph,
+
+            language: stats.language,
+            note_type: 'article',
+            folder_path: '/',
+            metadata: '{}',
+
+            sort_order: 0,
+            is_starred: false,
+            status: 'draft',
+            priority: 0,
+
+            updated_device: getDeviceInfo(),
+            version: 1,
         };
 
-        console.log('[API] Saving note...');
-        await storage.save(note);
+        console.log('[API] Saving note with stats:', { word_count: stats.word_count, read_time: stats.read_time_minutes });
+        await storage.save(note as any);
         console.log('[API] Note saved successfully');
         return NextResponse.json(note);
     } catch (e: unknown) {

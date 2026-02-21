@@ -10,8 +10,9 @@ import { Note, NoteMeta } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import debounce from 'lodash.debounce';
 import { toast } from 'sonner';
-import { Pin, Trash2, Settings, Download, LogOut, Menu, Tag, X, Share2, LayoutTemplate, FileUp, FileDown, Copy } from 'lucide-react';
+import { Pin, Trash2, Settings, Download, LogOut, Menu, Tag, X, Share2, LayoutTemplate, FileUp, FileDown, Copy, Save } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
+import { saveLocal, getLocal } from '@/lib/storage/local-db';
 
 // 动态导入重型组件
 const MilkdownEditor = dynamic(() => import('@/components/Editor'), {
@@ -50,6 +51,12 @@ export default function AppMain({ isUsingDefaultPass: initialIsUsingDefaultPass 
   const tagInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  
+  // Local-first editing states
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [lastSavedToRemote, setLastSavedToRemote] = useState<Date | null>(null);
+  const autoSaveIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingChangesRef = useRef<Set<string>>(new Set());
 
   // Load notes list
   const fetchNotes = useCallback(async (query?: string) => {
@@ -155,10 +162,15 @@ export default function AppMain({ isUsingDefaultPass: initialIsUsingDefaultPass 
         e.preventDefault();
         handleDeleteNote(selectedNote.id);
       }
+      // Cmd+S: manual save
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        handleManualSave();
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [selectedNote, showTagInput, showCommandPalette]);
+  }, [selectedNote, showTagInput, showCommandPalette, hasUnsavedChanges]);
 
   // Focus tag input when shown
   useEffect(() => {
@@ -177,7 +189,7 @@ export default function AppMain({ isUsingDefaultPass: initialIsUsingDefaultPass 
     []
   );
 
-  // Debounced content update
+  // Debounced content update - remote sync
   const debouncedUpdate = useMemo(
     () => debounce(async (id: string, updates: Partial<Note>, currentTitle?: string) => {
       setIsSaving(true);
@@ -190,6 +202,14 @@ export default function AppMain({ isUsingDefaultPass: initialIsUsingDefaultPass 
         if (res.ok) {
           const updated = await res.json();
           setNotes(prev => prev.map(n => n.id === updated.id ? { ...n, ...updates, updatedAt: updated.updatedAt } : n));
+          
+          // Mark as synced
+          pendingChangesRef.current.delete(id);
+          if (pendingChangesRef.current.size === 0) {
+            setHasUnsavedChanges(false);
+          }
+          setLastSavedToRemote(new Date());
+          console.log('[Remote] Synced to server:', id);
 
           if (currentTitle === 'New Note' && updates.content && updates.content.length > 50) {
             const aiRes = await fetch('/api/ai/process', {
@@ -211,13 +231,16 @@ export default function AppMain({ isUsingDefaultPass: initialIsUsingDefaultPass 
               }
             }
           }
+        } else {
+          console.error('[Remote] Failed to sync:', await res.text());
         }
-      } catch {
-        toast.error('Failed to auto-save note');
+      } catch (e) {
+        console.error('[Remote] Sync error:', e);
+        // Don't show error toast - local save is already done, remote will retry
       } finally {
         setIsSaving(false);
       }
-    }, 1000),
+    }, 3000), // 3 second debounce for remote sync
     []
   );
 
@@ -252,11 +275,139 @@ export default function AppMain({ isUsingDefaultPass: initialIsUsingDefaultPass 
     }
   };
 
-  const handleUpdateNote = (content: string) => {
+  const handleUpdateNote = async (content: string) => {
     if (!selectedNote) return;
+    
+    // Update UI immediately
     setSelectedNote({ ...selectedNote, content });
+    setHasUnsavedChanges(true);
+    pendingChangesRef.current.add(selectedNote.id);
+    
+    // Save to local immediately (never fails, always fast)
+    try {
+      await saveLocal({
+        id: selectedNote.id,
+        title: selectedNote.title,
+        content: content,
+        tags: selectedNote.tags || [],
+        createdAt: selectedNote.createdAt,
+        updatedAt: Date.now(),
+        isPinned: selectedNote.isPinned,
+        deletedAt: selectedNote.deletedAt,
+      });
+      console.log('[Local] Saved to IndexedDB:', selectedNote.id);
+    } catch (e) {
+      console.error('[Local] Failed to save:', e);
+    }
+    
+    // Trigger remote save (debounced)
     debouncedUpdate(selectedNote.id, { content }, selectedNote.title);
   };
+
+  // Manual save to remote (Ctrl+S)
+  const handleManualSave = async () => {
+    if (!selectedNote || !hasUnsavedChanges) return;
+    
+    setIsSaving(true);
+    try {
+      // First, fetch the current remote version to check for conflicts
+      const remoteRes = await fetch(`/api/notes/${selectedNote.id}`);
+      if (remoteRes.ok) {
+        const remoteNote = await remoteRes.json();
+        const localUpdatedAt = selectedNote.updatedAt;
+        const remoteUpdatedAt = remoteNote.updatedAt;
+        
+        // If remote version is newer (conflict), create a copy
+        if (remoteUpdatedAt > localUpdatedAt) {
+          console.log('[Conflict] Remote version is newer, creating copy...');
+          
+          // Create a copy note
+          const copyRes = await fetch('/api/notes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: `${selectedNote.title} (local copy)`,
+              content: selectedNote.content,
+            }),
+          });
+          
+          if (copyRes.ok) {
+            const copyNote = await copyRes.json();
+            setNotes(prev => [copyNote, ...prev]);
+            toast.warning('Conflict detected! Created a local copy. Please merge manually.', {
+              duration: 6000,
+            });
+            
+            // Load the remote version
+            setSelectedNote(remoteNote);
+            pendingChangesRef.current.delete(selectedNote.id);
+            if (pendingChangesRef.current.size === 0) {
+              setHasUnsavedChanges(false);
+            }
+            setLastSavedToRemote(new Date());
+          }
+          setIsSaving(false);
+          return;
+        }
+      }
+      
+      // No conflict, save normally
+      const res = await fetch(`/api/notes/${selectedNote.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: selectedNote.title,
+          content: selectedNote.content,
+        }),
+      });
+      
+      if (res.ok) {
+        const updated = await res.json();
+        setNotes(prev => prev.map(n => n.id === updated.id ? { ...n, title: selectedNote.title, content: selectedNote.content, updatedAt: updated.updatedAt } : n));
+        pendingChangesRef.current.delete(selectedNote.id);
+        if (pendingChangesRef.current.size === 0) {
+          setHasUnsavedChanges(false);
+        }
+        setLastSavedToRemote(new Date());
+        toast.success('Saved to cloud');
+        console.log('[Remote] Manual save successful:', selectedNote.id);
+      } else {
+        throw new Error('Save failed');
+      }
+    } catch (e) {
+      console.error('[Remote] Manual save failed:', e);
+      toast.error('Save failed, will retry automatically');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Auto-save timer effect
+  useEffect(() => {
+    // Read auto-save interval from localStorage (default: 10 minutes)
+    const savedInterval = localStorage.getItem('autoSaveInterval');
+    const intervalMinutes = savedInterval ? parseInt(savedInterval, 10) : 10;
+    
+    // If set to 0 (manual only) or invalid, don't set up auto-save
+    if (!intervalMinutes || intervalMinutes <= 0) {
+      return;
+    }
+    
+    const AUTO_SAVE_INTERVAL = intervalMinutes * 60 * 1000;
+    
+    autoSaveIntervalRef.current = setInterval(() => {
+      if (hasUnsavedChanges && selectedNote) {
+        console.log('[AutoSave] Triggering auto save...');
+        handleManualSave();
+      }
+    }, AUTO_SAVE_INTERVAL);
+    
+    return () => {
+      if (autoSaveIntervalRef.current) {
+        clearInterval(autoSaveIntervalRef.current);
+      }
+    };
+  }, [hasUnsavedChanges, selectedNote]);
 
   const handleDeleteNote = async (id: string) => {
     if (!confirm('Move this note to Trash? You can restore it from the Trash page.')) return;
@@ -482,10 +633,11 @@ export default function AppMain({ isUsingDefaultPass: initialIsUsingDefaultPass 
         </div>
       )}
 
-      {config?.activeStorage === 'Database' && (
+      {/* Debug Mode: Database Status Banner - Only shown when DEBUG=true in localStorage */}
+      {config?.activeStorage === 'Database' && typeof window !== 'undefined' && localStorage.getItem('DEBUG') === 'true' && (
         <div className="bg-green-50 dark:bg-green-900/20 border-b border-green-100 dark:border-green-800 px-4 py-1.5 flex items-center justify-center">
           <span className="text-green-700 dark:text-green-400 text-[10px] font-semibold uppercase tracking-widest leading-none">
-            ⚡ Ultra-Fast Database Active ({config.database.type})
+            ⚡ Database Active ({config.database.type})
           </span>
         </div>
       )}
@@ -776,6 +928,10 @@ export default function AppMain({ isUsingDefaultPass: initialIsUsingDefaultPass 
                 <MilkdownEditor
                   content={selectedNote.content}
                   onChange={handleUpdateNote}
+                  hasUnsavedChanges={hasUnsavedChanges}
+                  isSaving={isSaving}
+                  lastSavedAt={lastSavedToRemote}
+                  onManualSave={handleManualSave}
                 />
               </div>
 

@@ -9,6 +9,39 @@ export interface NoteMeta {
   wordCount?: number;    // Approximate word count
   tags?: string[];       // Tag list
   shareToken?: string | null; // Public share token (null = not shared)
+  
+  // v1.1.0: 22 one-line database enhancements
+  // Statistics
+  word_count?: number;
+  char_count?: number;
+  read_time_minutes?: number;
+  view_count?: number;
+  edit_count?: number;
+  
+  // Content analysis
+  code_blocks?: number;
+  image_count?: number;
+  link_count?: number;
+  content_hash?: string;
+  cover_image?: string | null;
+  first_paragraph?: string | null;
+  
+  // Metadata
+  language?: string;
+  note_type?: string;
+  folder_path?: string;
+  metadata?: string; // JSON string
+  
+  // Organization
+  sort_order?: number;
+  is_starred?: boolean;
+  status?: string;
+  priority?: number;
+  
+  // Audit
+  last_viewed_at?: number | null;
+  updated_device?: string;
+  version?: number;
 }
 
 export interface Note extends NoteMeta {

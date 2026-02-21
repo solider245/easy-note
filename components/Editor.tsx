@@ -3,16 +3,27 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Sparkles, Wand2, Type, Eye, Edit3 } from 'lucide-react';
+import { Sparkles, Wand2, Type, Eye, Edit3, Save, Check, Cloud, CloudOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCompletion } from 'ai/react';
 
 interface EditorProps {
     content: string;
     onChange: (markdown: string) => void;
+    hasUnsavedChanges?: boolean;
+    isSaving?: boolean;
+    lastSavedAt?: Date | null;
+    onManualSave?: () => void;
 }
 
-export default function SimpleEditor({ content, onChange }: EditorProps) {
+export default function SimpleEditor({ 
+    content, 
+    onChange, 
+    hasUnsavedChanges = false,
+    isSaving = false,
+    lastSavedAt = null,
+    onManualSave 
+}: EditorProps) {
     const [isPreview, setIsPreview] = useState(false);
     const [selection, setSelection] = useState({ start: 0, end: 0 });
 
@@ -177,6 +188,36 @@ export default function SimpleEditor({ content, onChange }: EditorProps) {
 
                     <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
 
+                    {/* Save Status & Button */}
+                    {onManualSave && (
+                        <>
+                            <button
+                                onClick={onManualSave}
+                                disabled={isSaving || !hasUnsavedChanges}
+                                className="flex items-center gap-1 px-2 py-1 text-sm hover:bg-gray-200 dark:hover:bg-gray-700 rounded disabled:opacity-50"
+                                title="Save to cloud (Ctrl+S)"
+                            >
+                                {isSaving ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                                        Saving...
+                                    </>
+                                ) : hasUnsavedChanges ? (
+                                    <>
+                                        <CloudOff className="w-4 h-4 text-amber-500" />
+                                        <span className="text-amber-600">Unsaved</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Check className="w-4 h-4 text-green-500" />
+                                        <span className="text-green-600">Saved</span>
+                                    </>
+                                )}
+                            </button>
+                            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
+                        </>
+                    )}
+
                     {/* Preview Toggle */}
                     <button
                         onClick={() => setIsPreview(!isPreview)}
@@ -224,7 +265,28 @@ export default function SimpleEditor({ content, onChange }: EditorProps) {
                     {' • '}
                     {content.length} characters
                 </span>
-                <span>
+                <span className="flex items-center gap-2">
+                    {onManualSave && (
+                        <>
+                            {hasUnsavedChanges ? (
+                                <span className="text-amber-600 flex items-center gap-1">
+                                    <CloudOff className="w-3 h-3" />
+                                    Unsaved changes
+                                </span>
+                            ) : lastSavedAt ? (
+                                <span className="text-green-600 flex items-center gap-1">
+                                    <Check className="w-3 h-3" />
+                                    Saved {lastSavedAt.toLocaleTimeString()}
+                                </span>
+                            ) : (
+                                <span className="text-green-600 flex items-center gap-1">
+                                    <Check className="w-3 h-3" />
+                                    Saved locally
+                                </span>
+                            )}
+                            {' • '}
+                        </>
+                    )}
                     {isPreview ? 'Preview Mode' : 'Edit Mode'}
                     {' • '}
                     Markdown

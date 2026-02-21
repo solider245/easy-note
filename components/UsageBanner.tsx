@@ -6,11 +6,16 @@ interface UsageBannerProps {
 }
 
 export default function UsageBanner({ used, total }: UsageBannerProps) {
-    // Don't show banner if total is Infinity (DB mode) or usage is below 80%
-    if (!isFinite(total) || total === 0) return null;
+    // Don't show banner if:
+    // - total is Infinity (DB mode)
+    // - total is 0
+    // - used is NaN or invalid
+    if (!isFinite(total) || total === 0 || isNaN(used) || used < 0) return null;
+
     const percentage = Math.round((used / total) * 100);
 
-    if (percentage < 80) return null;
+    // Only show warning when storage usage is above 80%
+    if (percentage < 80 || isNaN(percentage)) return null;
 
     return (
         <div className="bg-yellow-500 px-4 py-2 text-white text-center text-sm font-medium">

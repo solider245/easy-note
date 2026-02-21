@@ -55,6 +55,10 @@ export default function SettingsPage() {
     const [isExporting, setIsExporting] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
 
+    // -- State: Editor Settings --
+    const [autoSaveInterval, setAutoSaveInterval] = useState<number>(10);
+    const [hasUnsavedSettings, setHasUnsavedSettings] = useState(false);
+
     const fetchConfig = async () => {
         try {
             const res = await fetch('/api/status/config');
@@ -89,7 +93,24 @@ export default function SettingsPage() {
         fetchConfig();
         fetchStats();
         fetchDbStatus();
+        // Load editor settings from localStorage
+        const savedInterval = localStorage.getItem('autoSaveInterval');
+        if (savedInterval) {
+            setAutoSaveInterval(parseInt(savedInterval, 10));
+        }
     }, []);
+
+    // -- Editor Settings Actions --
+    const handleAutoSaveChange = (value: number) => {
+        setAutoSaveInterval(value);
+        setHasUnsavedSettings(true);
+    };
+
+    const saveEditorSettings = () => {
+        localStorage.setItem('autoSaveInterval', autoSaveInterval.toString());
+        setHasUnsavedSettings(false);
+        toast.success('Editor settings saved');
+    };
 
     // -- Database Actions --
     const fetchDbStatus = async () => {
@@ -488,6 +509,70 @@ export default function SettingsPage() {
                                         <div className="text-[10px] text-gray-400">Restore or merge backups</div>
                                     </div>
                                 </label>
+                            </div>
+                        </section>
+
+                        {/* Core: Editor Settings */}
+                        <section className="bg-white dark:bg-gray-800 rounded-3xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
+                            <h3 className="text-xl font-bold mb-2 flex items-center gap-3">
+                                <Settings className="h-6 w-6 text-blue-500" />
+                                Editor Settings
+                            </h3>
+                            <p className="text-sm text-gray-500 mb-6">Configure auto-save behavior for offline editing</p>
+
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                        Auto-save Interval
+                                    </label>
+                                    <p className="text-xs text-gray-400">
+                                        How often to automatically sync changes to the server
+                                    </p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {[
+                                            { value: 1, label: '1 min' },
+                                            { value: 5, label: '5 min' },
+                                            { value: 10, label: '10 min' },
+                                            { value: 30, label: '30 min' },
+                                            { value: 0, label: 'Manual only' }
+                                        ].map((option) => (
+                                            <button
+                                                key={option.value}
+                                                onClick={() => handleAutoSaveChange(option.value)}
+                                                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                                                    autoSaveInterval === option.value
+                                                        ? 'bg-blue-600 text-white shadow-md'
+                                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                                }`}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+                                    <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                                        Changes are always saved locally to your browser. Auto-save controls how often they sync to the server.
+                                        You can always use Ctrl+S to save manually.
+                                    </p>
+                                </div>
+
+                                {hasUnsavedSettings && (
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            onClick={saveEditorSettings}
+                                            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center gap-2"
+                                        >
+                                            <Save className="h-4 w-4" />
+                                            Save Settings
+                                        </button>
+                                        <span className="text-xs text-amber-600 dark:text-amber-400">
+                                            Unsaved changes
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         </section>
 
